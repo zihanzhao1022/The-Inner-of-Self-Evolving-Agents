@@ -70,6 +70,10 @@ class BifurcationShift:
     tag_pair: tuple[str, str]
     cosine_a: Optional[np.ndarray]  # (num_layers,) or None if pair absent
     cosine_b: Optional[np.ndarray]
+    cosine_lower_a: Optional[np.ndarray]  # 2.5% percentile (bootstrap CI)
+    cosine_upper_a: Optional[np.ndarray]  # 97.5% percentile
+    cosine_lower_b: Optional[np.ndarray]
+    cosine_upper_b: Optional[np.ndarray]
     bif_layer_a: Optional[int]
     bif_layer_b: Optional[int]
     bif_shifted: bool
@@ -245,7 +249,7 @@ class ReportComparator:
 
     def _compare_bifurcation(self) -> dict[str, BifurcationShift]:
         shifts = {}
-        all_pairs = set(self.a.pairwise_bifurcation.keys()) | set(self.b.pairwise_bifurcation.keys())
+        all_pairs = sorted(set(self.a.pairwise_bifurcation.keys()) | set(self.b.pairwise_bifurcation.keys()))
 
         for pair in all_pairs:
             bif_a = self.a.pairwise_bifurcation.get(pair, {})
@@ -275,6 +279,10 @@ class ReportComparator:
                 tag_pair=pair,
                 cosine_a=cos_a,
                 cosine_b=cos_b,
+                cosine_lower_a=bif_a.get("cosine_lower"),
+                cosine_upper_a=bif_a.get("cosine_upper"),
+                cosine_lower_b=bif_b.get("cosine_lower"),
+                cosine_upper_b=bif_b.get("cosine_upper"),
                 bif_layer_a=la,
                 bif_layer_b=lb,
                 bif_shifted=la != lb,
@@ -295,6 +303,16 @@ TAG_COLORS = {
 
 COLOR_A = "#2196F3"
 COLOR_B = "#F44336"
+
+# Fixed display order for the common 4-tag setup (6 pairs).
+FIXED_BIFURCATION_ORDER = [
+    ("factual", "harmful"),
+    ("factual", "reasoning"),
+    ("factual", "safe"),
+    ("harmful", "reasoning"),
+    ("harmful", "safe"),
+    ("reasoning", "safe"),
+]
 
 
 class CompareVisualizer:
@@ -396,22 +414,45 @@ class CompareVisualizer:
         return fig
 
     def plot_bifurcation_comparison(self, result: ComparisonResult, save_path=None) -> plt.Figure:
-        """Overlaid cosine similarity curves for each behavior pair."""
+        """Overlaid cosine similarity curves with bootstrap CI bands."""
         bifs = result.bifurcation_shifts
         if not bifs:
             return plt.figure()
 
-        n = len(bifs)
-        fig, axes = plt.subplots(1, min(n, 4), figsize=(5 * min(n, 4), 5), sharey=True)
-        if n == 1: axes = [axes]
+        ordered_items = []
+        used = set()
 
-        for ax, (key, bsh) in zip(axes, list(bifs.items())[:4]):
+        # 1) Preferred fixed order for the standard 6-pair view.
+        for ta, tb in FIXED_BIFURCATION_ORDER:
+            key = f"{ta} vs {tb}"
+            if key in bifs:
+                ordered_items.append((key, bifs[key]))
+                used.add(key)
+
+        # 2) Any extra pairs are appended in deterministic order.
+        for key in sorted(bifs.keys()):
+            if key not in used:
+                ordered_items.append((key, bifs[key]))
+
+        n = len(ordered_items)
+        cols = min(3, n)
+        rows = int(np.ceil(n / cols))
+        fig, axes = plt.subplots(rows, cols, figsize=(5 * cols, 4.6 * rows), sharey=True)
+        axes = np.atleast_1d(axes).reshape(-1)
+
+        for ax, (key, bsh) in zip(axes, ordered_items):
             if bsh.cosine_a is not None:
                 x_a = np.arange(len(bsh.cosine_a))
                 ax.plot(x_a, bsh.cosine_a, "o-", color=COLOR_A, lw=2, ms=3, label="A")
+                if bsh.cosine_lower_a is not None and bsh.cosine_upper_a is not None:
+                    ax.fill_between(x_a, bsh.cosine_lower_a, bsh.cosine_upper_a,
+                                    color=COLOR_A, alpha=0.12)
             if bsh.cosine_b is not None:
                 x_b = np.arange(len(bsh.cosine_b))
                 ax.plot(x_b, bsh.cosine_b, "s-", color=COLOR_B, lw=2, ms=3, label="B")
+                if bsh.cosine_lower_b is not None and bsh.cosine_upper_b is not None:
+                    ax.fill_between(x_b, bsh.cosine_lower_b, bsh.cosine_upper_b,
+                                    color=COLOR_B, alpha=0.12)
 
             ax.axhline(0.9, color="gray", ls=":", alpha=0.4)
 
@@ -425,6 +466,10 @@ class CompareVisualizer:
             ax.legend(fontsize=9)
             ax.set_ylim(-0.1, 1.1)
             ax.grid(True, alpha=0.3)
+
+        # Hide unused subplot slots when n is not a multiple of cols.
+        for ax in axes[n:]:
+            ax.axis("off")
 
         axes[0].set_ylabel("Cosine Similarity")
         fig.suptitle(f"Bifurcation: {result.model_a} vs {result.model_b}",

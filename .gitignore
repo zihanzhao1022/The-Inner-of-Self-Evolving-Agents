@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE / editors
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude Code internal state
+.claude/
+
+# OS junk
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Heavy experiment outputs (regenerable; should not be in source tree)
+results/
+llm_lens/examples/AZR-Coder-3B/
+llm_lens/examples/Qwen_Qwen2.5-3B/
+
+# Nested submodule (decide later whether to register as a proper git submodule)
+demo/
+
+# Logs / temp
+*.log
+*.tmp

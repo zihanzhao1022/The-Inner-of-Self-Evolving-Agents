@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>Behavior Vector Dynamics Across Layers</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #0a0a1a; color: #e0e0e0; font-family: 'Segoe UI', system-ui, sans-serif; overflow-x: hidden; }
+
+  h1 { text-align: center; padding: 24px 0 8px; font-size: 22px; color: #fff; letter-spacing: 1px; }
+  .subtitle { text-align: center; font-size: 13px; color: #888; margin-bottom: 24px; }
+
+  .container { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; padding: 0 20px 30px; }
+
+  .card {
+    background: #12122a;
+    border: 1px solid #2a2a4a;
+    border-radius: 12px;
+    padding: 16px;
+    width: 340px;
+  }
+  .card h2 { font-size: 14px; color: #aaa; margin-bottom: 4px; font-weight: 500; }
+  .card h3 { font-size: 16px; color: #fff; margin-bottom: 12px; }
+  .card canvas { width: 100%; border-radius: 8px; background: #0d0d20; }
+  .card .note { font-size: 11.5px; color: #777; margin-top: 8px; line-height: 1.5; }
+  .card .note em { color: #bbb; font-style: normal; }
+
+  .legend {
+    display: flex; gap: 16px; justify-content: center; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .legend span { font-size: 12px; display: flex; align-items: center; gap: 5px; }
+  .legend .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+  .wide-card {
+    background: #12122a;
+    border: 1px solid #2a2a4a;
+    border-radius: 12px;
+    padding: 16px;
+    width: 710px;
+  }
+  .wide-card h2 { font-size: 14px; color: #aaa; margin-bottom: 4px; font-weight: 500; }
+  .wide-card h3 { font-size: 16px; color: #fff; margin-bottom: 12px; }
+  .wide-card canvas { width: 100%; border-radius: 8px; background: #0d0d20; }
+  .wide-card .note { font-size: 11.5px; color: #777; margin-top: 8px; line-height: 1.5; }
+  .wide-card .note em { color: #bbb; font-style: normal; }
+
+  .bottom-section {
+    padding: 0 20px 40px;
+    display: flex; justify-content: center;
+  }
+</style>
+</head>
+<body>
+
+<h1>Behavior Vector Dynamics Across Transformer Layers</h1>
+<p class="subtitle">行为方向向量在不同层深度的演化示意 — 解释"越来越像却越来越好分"的现象</p>
+
+<div class="legend">
+  <span><span class="dot" style="background:#4ecdc4"></span> Safe behavior</span>
+  <span><span class="dot" style="background:#ff6b6b"></span> Harmful behavior</span>
+  <span><span class="dot" style="background:#ffd93d"></span> Reasoning behavior</span>
+  <span><span class="dot" style="background:#6bcb77"></span> Factual behavior</span>
+  <span style="color:#555">|</span>
+  <span style="color:#888; font-size:12px">虚线箭头 = 行为方向向量 (probe weight direction)</span>
+</div>
+
+<div class="container">
+  <!-- Card 1: Shallow layers -->
+  <div class="card">
+    <h2>Phase 1 · 浅层 (Layer 0–10)</h2>
+    <h3>形成期 — 行为方向尚未浮现</h3>
+    <canvas id="c1" width="620" height="620"></canvas>
+    <p class="note">
+      各行为类型的表征<em>散布在高维空间中</em>，彼此混杂。<br>
+      行为方向向量（虚线）<em>短且不稳定</em>，线性探针准确率低。<br>
+      整体相似度也不高（各类表征都很分散）。
+    </p>
+  </div>
+
+  <!-- Card 2: Middle layers -->
+  <div class="card">
+    <h2>Phase 2 · 中间层 (Layer 10–25)</h2>
+    <h3>分化期 — 行为方向开始结晶</h3>
+    <canvas id="c2" width="620" height="620"></canvas>
+    <p class="note">
+      各类行为的表征<em>开始聚拢</em>，但不同类之间仍有明显距离。<br>
+      行为方向向量<em>变长、变稳定</em>，指向各自聚类中心。<br>
+      对应 Result 1 中 layer 20–30 差异显著出现的阶段。
+    </p>
+  </div>
+
+  <!-- Card 3: Deep layers -->
+  <div class="card">
+    <h2>Phase 3 · 深层 (Layer 25–36)</h2>
+    <h3>结晶期 — 整体趋同，行为方向精纯</h3>
+    <canvas id="c3" width="620" height="620"></canvas>
+    <p class="note">
+      所有表征<em>向中心聚拢</em>（整体余弦相似度升高 → Result 3）。<br>
+      但沿<em>行为方向</em>的投影仍然清晰分开（→ Result 4 探针准确率高）。<br>
+      行为信息被<em>压缩到极少维度</em>，但 margin 最大。
+    </p>
+  </div>
+
+  <!-- Card 4: The "paradox" explanation -->
+  <div class="card">
+    <h2>Key Insight · 核心解释</h2>
+    <h3>1D 投影视角 — 为什么不矛盾</h3>
+    <canvas id="c4" width="620" height="620"></canvas>
+    <p class="note">
+      上方：高维空间中所有点<em>整体靠近</em>（高相似度）。<br>
+      下方：沿行为方向投影后，<em>类间分离清晰</em>（高分类准确率）。<br>
+      线性探针只关心投影后的分布，不受整体趋同影响。
+    </p>
+  </div>
+</div>
+
+<div class="bottom-section">
+  <div class="wide-card">
+    <h2>Timeline · 跨层追踪</h2>
+    <h3>行为方向向量的跨层演化轨迹</h3>
+    <canvas id="c5" width="1380" height="500"></canvas>
+    <p class="note">
+      左图：各层行为方向向量之间的<em>余弦相似度</em>（与前一层对比）— 浅层波动大，中层稳定，深层微调。<br>
+      右图：行为方向向量的<em>模长</em>（分类信心）— 浅层弱，中层跃升，深层最强。<br>
+      两张图交叉验证：方向稳定的同时信心增强 = 行为决策已锁定。
+    </p>
+  </div>
+</div>
+
+<script>
+// ─── Utilities ───
+function rand(min, max) { return Math.random() * (max - min) + min; }
+function gaussRand(mean, std) {
+  let u = 0, v = 0;
+  while(u === 0) u = Math.random();
+  while(v === 0) v = Math.random();
+  return mean + std * Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
+}
+
+const colors = {
+  safe: '#4ecdc4',
+  harmful: '#ff6b6b',
+  reasoning: '#ffd93d',
+  factual: '#6bcb77',
+};
+
+function drawArrow(ctx, x1, y1, x2, y2, color, lineWidth, dashed) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = lineWidth;
+  if (dashed) ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.stroke();
+  // arrowhead
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const headLen = 8 + lineWidth * 2;
+  ctx.setLineDash([]);
+  ctx.beginPath();
+  ctx.moveTo(x2, y2);
+  ctx.lineTo(x2 - headLen * Math.cos(angle - 0.4), y2 - headLen * Math.sin(angle - 0.4));
+  ctx.lineTo(x2 - headLen * Math.cos(angle + 0.4), y2 - headLen * Math.sin(angle + 0.4));
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawPoint(ctx, x, y, color, r) {
+  ctx.beginPath();
+  ctx.arc(x, y, r || 4, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.7;
+  ctx.fill();
+  ctx.globalAlpha = 1;
+}
+
+function drawLabel(ctx, text, x, y, color, size) {
+  ctx.font = (size || 11) + 'px system-ui, sans-serif';
+  ctx.fillStyle = color || '#888';
+  ctx.fillText(text, x, y);
+}
+
+function drawAxes(ctx, cx, cy, len) {
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([3, 3]);
+  // horizontal
+  ctx.beginPath(); ctx.moveTo(cx - len, cy); ctx.lineTo(cx + len, cy); ctx.stroke();
+  // vertical
+  ctx.beginPath(); ctx.moveTo(cx, cy - len); ctx.lineTo(cx, cy + len); ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+// ─── Card 1: Shallow layers ───
+(function() {
+  const canvas = document.getElementById('c1');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const cx = W / 2, cy = H / 2;
+
+  drawAxes(ctx, cx, cy, 240);
+  drawLabel(ctx, 'dim 1', W - 45, cy - 8, '#555');
+  drawLabel(ctx, 'dim 2', cx + 8, 20, '#555');
+
+  // Scattered points for each behavior - very mixed
+  const spread = 120;
+  const categories = [
+    { key: 'safe', offX: -15, offY: -10 },
+    { key: 'harmful', offX: 20, offY: 15 },
+    { key: 'reasoning', offX: -10, offY: 20 },
+    { key: 'factual', offX: 15, offY: -15 },
+  ];
+
+  // seed-like random for consistency
+  let seed = 42;
+  function seededRand() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
+  function sGauss(m, s) {
+    let u = seededRand(), v = seededRand();
+    return m + s * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  categories.forEach(cat => {
+    for (let i = 0; i < 20; i++) {
+      const x = cx + sGauss(cat.offX, spread);
+      const y = cy + sGauss(cat.offY, spread);
+      drawPoint(ctx, x, y, colors[cat.key], 4);
+    }
+  });
+
+  // Short, weak behavior direction arrows
+  categories.forEach(cat => {
+    const len = 30;
+    const angle = Math.atan2(cat.offY, cat.offX);
+    drawArrow(ctx, cx, cy, cx + len * Math.cos(angle), cy + len * Math.sin(angle), colors[cat.key], 1.5, true);
+  });
+
+  drawLabel(ctx, '行为方向短且混乱', cx - 50, H - 20, '#666', 12);
+})();
+
+// ─── Card 2: Middle layers ───
+(function() {
+  const canvas = document.getElementById('c2');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const cx = W / 2, cy = H / 2;
+
+  drawAxes(ctx, cx, cy, 240);
+  drawLabel(ctx, 'dim 1', W - 45, cy - 8, '#555');
+  drawLabel(ctx, 'dim 2', cx + 8, 20, '#555');
+
+  const categories = [
+    { key: 'safe', offX: -100, offY: -80 },
+    { key: 'harmful', offX: 100, offY: 80 },
+    { key: 'reasoning', offX: -80, offY: 90 },
+    { key: 'factual', offX: 90, offY: -70 },
+  ];
+
+  let seed = 42;
+  function seededRand() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
+  function sGauss(m, s) {
+    let u = seededRand(), v = seededRand();
+    return m + s * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  categories.forEach(cat => {
+    const spread = 45;
+    for (let i = 0; i < 20; i++) {
+      const x = cx + sGauss(cat.offX, spread);
+      const y = cy + sGauss(cat.offY, spread);
+      drawPoint(ctx, x, y, colors[cat.key], 4.5);
+    }
+  });
+
+  // Longer behavior direction arrows
+  categories.forEach(cat => {
+    const len = 100;
+    const angle = Math.atan2(cat.offY, cat.offX);
+    drawArrow(ctx, cx, cy, cx + len * Math.cos(angle), cy + len * Math.sin(angle), colors[cat.key], 2, true);
+  });
+
+  drawLabel(ctx, '行为方向清晰，类间距离大', cx - 70, H - 20, '#666', 12);
+})();
+
+// ─── Card 3: Deep layers ───
+(function() {
+  const canvas = document.getElementById('c3');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const cx = W / 2, cy = H / 2;
+
+  drawAxes(ctx, cx, cy, 240);
+  drawLabel(ctx, 'dim 1', W - 45, cy - 8, '#555');
+  drawLabel(ctx, 'dim 2', cx + 8, 20, '#555');
+
+  // All clusters close to center but still separable
+  const categories = [
+    { key: 'safe', offX: -28, offY: -22 },
+    { key: 'harmful', offX: 28, offY: 22 },
+    { key: 'reasoning', offX: -22, offY: 25 },
+    { key: 'factual', offX: 25, offY: -20 },
+  ];
+
+  let seed = 42;
+  function seededRand() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
+  function sGauss(m, s) {
+    let u = seededRand(), v = seededRand();
+    return m + s * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  // Draw a faint circle showing overall convergence
+  ctx.beginPath();
+  ctx.arc(cx, cy, 70, 0, Math.PI * 2);
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  drawLabel(ctx, '整体收敛区域', cx + 50, cy - 65, '#444', 11);
+
+  categories.forEach(cat => {
+    const spread = 15;
+    for (let i = 0; i < 20; i++) {
+      const x = cx + sGauss(cat.offX, spread);
+      const y = cy + sGauss(cat.offY, spread);
+      drawPoint(ctx, x, y, colors[cat.key], 4.5);
+    }
+  });
+
+  // Behavior direction arrows - short but very precise
+  categories.forEach(cat => {
+    const len = 55;
+    const angle = Math.atan2(cat.offY, cat.offX);
+    drawArrow(ctx, cx, cy, cx + len * Math.cos(angle), cy + len * Math.sin(angle), colors[cat.key], 2.5, true);
+  });
+
+  // Draw a separating line to show linear separability
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([2, 3]);
+  ctx.beginPath(); ctx.moveTo(cx - 100, cy + 100); ctx.lineTo(cx + 100, cy - 100); ctx.stroke();
+  ctx.setLineDash([]);
+
+  drawLabel(ctx, '整体近，但沿行为方向仍可分', cx - 85, H - 20, '#666', 12);
+})();
+
+// ─── Card 4: 1D projection explanation ───
+(function() {
+  const canvas = document.getElementById('c4');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  // Top half: 2D view showing points close together
+  const topCy = 170;
+  const topCx = W / 2;
+
+  drawLabel(ctx, '高维空间 — 整体视角', 20, 30, '#aaa', 13);
+
+  // Draw points close together
+  let seed = 77;
+  function seededRand() { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }
+  function sGauss(m, s) {
+    let u = seededRand(), v = seededRand();
+    return m + s * Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+  }
+
+  const cats2d = [
+    { key: 'safe', offX: -18, offY: -12 },
+    { key: 'harmful', offX: 18, offY: 12 },
+  ];
+
+  // Faint bounding area
+  ctx.beginPath();
+  ctx.arc(topCx, topCy, 55, 0, Math.PI * 2);
+  ctx.strokeStyle = '#2a2a4a';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  cats2d.forEach(cat => {
+    for (let i = 0; i < 25; i++) {
+      drawPoint(ctx, topCx + sGauss(cat.offX, 22), topCy + sGauss(cat.offY, 22), colors[cat.key], 4);
+    }
+  });
+
+  // Draw the behavior direction
+  drawArrow(ctx, topCx - 70, topCy + 50, topCx + 70, topCy - 50, 'rgba(255,255,255,0.4)', 1.5, true);
+  drawLabel(ctx, '行为方向', topCx + 75, topCy - 50, '#666', 11);
+
+  // Double-headed arrow showing "small overall distance"
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(topCx - 45, topCy - 55); ctx.lineTo(topCx + 45, topCy - 55); ctx.stroke();
+  drawLabel(ctx, '← 整体距离小 →', topCx - 42, topCy - 62, '#555', 10);
+
+  // Separator
+  ctx.strokeStyle = '#2a2a4a';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(40, 290); ctx.lineTo(W - 40, 290); ctx.stroke();
+
+  // Bottom half: 1D projection
+  drawLabel(ctx, '沿行为方向投影 — 探针视角', 20, 330, '#aaa', 13);
+
+  const projY = 420;
+  // Projection axis
+  ctx.strokeStyle = '#444';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(60, projY); ctx.lineTo(W - 60, projY); ctx.stroke();
+
+  // Project points onto 1D
+  seed = 77;
+  const safeProj = [];
+  const harmProj = [];
+  for (let i = 0; i < 25; i++) {
+    const sx = sGauss(-18, 22), sy = sGauss(-12, 22);
+    // project onto behavior direction (-1, 1) normalized
+    safeProj.push((-sx + sy) / Math.sqrt(2));
+  }
+  for (let i = 0; i < 25; i++) {
+    const sx = sGauss(18, 22), sy = sGauss(12, 22);
+    harmProj.push((-sx + sy) / Math.sqrt(2));
+  }
+
+  const projCx = W / 2;
+  const projScale = 3.5;
+
+  safeProj.forEach(v => {
+    const x = projCx + v * projScale;
+    drawPoint(ctx, x, projY + rand(-8, 8), colors.safe, 4);
+  });
+  harmProj.forEach(v => {
+    const x = projCx + v * projScale;
+    drawPoint(ctx, x, projY + rand(-8, 8), colors.harmful, 4);
+  });
+
+  // Separating line
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([5, 3]);
+  ctx.beginPath(); ctx.moveTo(projCx, projY - 30); ctx.lineTo(projCx, projY + 30); ctx.stroke();
+  ctx.setLineDash([]);
+  drawLabel(ctx, '分类边界', projCx - 18, projY + 50, '#888', 11);
+
+  // Labels for the two clusters
+  drawLabel(ctx, 'Safe', 100, projY - 25, colors.safe, 12);
+  drawLabel(ctx, 'Harmful', W - 160, projY - 25, colors.harmful, 12);
+
+  // Margin arrow
+  drawArrow(ctx, projCx - 50, projY + 38, projCx - 5, projY + 38, 'rgba(255,255,255,0.3)', 1, false);
+  drawArrow(ctx, projCx + 50, projY + 38, projCx + 5, projY + 38, 'rgba(255,255,255,0.3)', 1, false);
+  drawLabel(ctx, 'margin', projCx - 18, projY + 35, '#666', 10);
+
+  drawLabel(ctx, '投影后分离清晰 → 探针准确率高', topCx - 90, H - 20, '#666', 12);
+})();
+
+// ─── Card 5: Timeline chart ───
+(function() {
+  const canvas = document.getElementById('c5');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+
+  const leftW = W / 2 - 40;
+  const rightX = W / 2 + 40;
+  const rightW = W / 2 - 40;
+
+  const plotTop = 50;
+  const plotBottom = H - 80;
+  const plotH = plotBottom - plotTop;
+
+  // ─── Left plot: Cosine similarity between adjacent layers ───
+  drawLabel(ctx, '相邻层行为方向的余弦相似度', 80, 30, '#bbb', 13);
+
+  // Axes
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(60, plotTop); ctx.lineTo(60, plotBottom); ctx.lineTo(leftW, plotBottom); ctx.stroke();
+
+  drawLabel(ctx, '1.0', 25, plotTop + 5, '#666', 11);
+  drawLabel(ctx, '0.5', 25, plotTop + plotH / 2 + 5, '#666', 11);
+  drawLabel(ctx, '0.0', 25, plotBottom + 5, '#666', 11);
+  drawLabel(ctx, 'Layer →', leftW - 45, plotBottom + 25, '#666', 11);
+
+  // Phase labels
+  const phaseY = plotBottom + 45;
+  ctx.fillStyle = 'rgba(78, 205, 196, 0.08)';
+  ctx.fillRect(60, plotTop, (leftW - 60) * 0.3, plotH);
+  ctx.fillStyle = 'rgba(255, 217, 61, 0.06)';
+  ctx.fillRect(60 + (leftW - 60) * 0.3, plotTop, (leftW - 60) * 0.4, plotH);
+  ctx.fillStyle = 'rgba(107, 203, 119, 0.06)';
+  ctx.fillRect(60 + (leftW - 60) * 0.7, plotTop, (leftW - 60) * 0.3, plotH);
+
+  drawLabel(ctx, '形成期', 105, phaseY, '#4ecdc4', 11);
+  drawLabel(ctx, '分化→稳定期', 240, phaseY, '#ffd93d', 11);
+  drawLabel(ctx, '结晶期', 440, phaseY, '#6bcb77', 11);
+
+  // Cosine similarity curve (low → high → very high)
+  const nPoints = 36;
+  const simData = [];
+  for (let i = 0; i < nPoints; i++) {
+    const t = i / (nPoints - 1);
+    let val;
+    if (t < 0.3) {
+      val = 0.3 + 0.3 * Math.random() + t * 0.5;
+    } else if (t < 0.7) {
+      val = 0.7 + 0.15 * t + 0.05 * Math.random();
+    } else {
+      val = 0.9 + 0.05 * Math.sin(t * 10) + 0.03 * Math.random();
+    }
+    simData.push(Math.min(val, 1.0));
+  }
+
+  ctx.strokeStyle = '#4ecdc4';
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  simData.forEach((v, i) => {
+    const x = 60 + (i / (nPoints - 1)) * (leftW - 80);
+    const y = plotBottom - v * plotH;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Dots
+  simData.forEach((v, i) => {
+    const x = 60 + (i / (nPoints - 1)) * (leftW - 80);
+    const y = plotBottom - v * plotH;
+    ctx.beginPath(); ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#4ecdc4'; ctx.fill();
+  });
+
+  // Annotation
+  drawArrow(ctx, 180, plotTop + 50, 130, plotTop + plotH * 0.35, 'rgba(255,255,255,0.3)', 1, false);
+  drawLabel(ctx, '方向波动大', 182, plotTop + 52, '#888', 10);
+
+  drawArrow(ctx, 420, plotTop + 25, 450, plotTop + plotH * 0.08, 'rgba(255,255,255,0.3)', 1, false);
+  drawLabel(ctx, '方向稳定', 375, plotTop + 28, '#888', 10);
+
+  // ─── Separator ───
+  ctx.strokeStyle = '#2a2a4a';
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4, 4]);
+  ctx.beginPath(); ctx.moveTo(W / 2, plotTop - 10); ctx.lineTo(W / 2, plotBottom + 50); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // ─── Right plot: Vector magnitude (classification confidence) ───
+  drawLabel(ctx, '行为方向向量模长（分类信心）', rightX + 30, 30, '#bbb', 13);
+
+  ctx.strokeStyle = '#555';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(rightX, plotTop); ctx.lineTo(rightX, plotBottom); ctx.lineTo(rightX + rightW - 40, plotBottom); ctx.stroke();
+
+  drawLabel(ctx, 'high', rightX - 35, plotTop + 5, '#666', 11);
+  drawLabel(ctx, 'mid', rightX - 30, plotTop + plotH / 2 + 5, '#666', 11);
+  drawLabel(ctx, 'low', rightX - 30, plotBottom + 5, '#666', 11);
+  drawLabel(ctx, 'Layer →', rightX + rightW - 85, plotBottom + 25, '#666', 11);
+
+  // Phase shading
+  ctx.fillStyle = 'rgba(78, 205, 196, 0.08)';
+  ctx.fillRect(rightX, plotTop, (rightW - 40) * 0.3, plotH);
+  ctx.fillStyle = 'rgba(255, 217, 61, 0.06)';
+  ctx.fillRect(rightX + (rightW - 40) * 0.3, plotTop, (rightW - 40) * 0.4, plotH);
+  ctx.fillStyle = 'rgba(107, 203, 119, 0.06)';
+  ctx.fillRect(rightX + (rightW - 40) * 0.7, plotTop, (rightW - 40) * 0.3, plotH);
+
+  drawLabel(ctx, '形成期', rightX + 45, phaseY, '#4ecdc4', 11);
+  drawLabel(ctx, '分化→稳定期', rightX + 180, phaseY, '#ffd93d', 11);
+  drawLabel(ctx, '结晶期', rightX + 380, phaseY, '#6bcb77', 11);
+
+  // Magnitude curves for each behavior
+  const behaviorConfigs = [
+    { key: 'safe', phase: 0.25, amp: 0.9 },
+    { key: 'harmful', phase: 0.3, amp: 0.85 },
+    { key: 'reasoning', phase: 0.35, amp: 0.75 },
+    { key: 'factual', phase: 0.28, amp: 0.8 },
+  ];
+
+  behaviorConfigs.forEach(bc => {
+    const magData = [];
+    for (let i = 0; i < nPoints; i++) {
+      const t = i / (nPoints - 1);
+      let val;
+      if (t < bc.phase) {
+        val = 0.1 + t * 0.5 + 0.05 * Math.random();
+      } else if (t < 0.7) {
+        val = 0.3 + (t - bc.phase) * 1.2 + 0.03 * Math.random();
+      } else {
+        val = bc.amp + 0.02 * Math.sin(t * 15) + 0.02 * Math.random();
+      }
+      magData.push(Math.min(val, 1.0));
+    }
+
+    ctx.strokeStyle = colors[bc.key];
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.85;
+    ctx.beginPath();
+    magData.forEach((v, i) => {
+      const x = rightX + (i / (nPoints - 1)) * (rightW - 60);
+      const y = plotBottom - v * plotH;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // End label
+    const lastX = rightX + rightW - 60;
+    const lastY = plotBottom - magData[magData.length - 1] * plotH;
+    drawLabel(ctx, bc.key, lastX + 5, lastY + 4, colors[bc.key], 10);
+  });
+
+  // Annotation for the jump
+  drawArrow(ctx, rightX + 200, plotTop + 35, rightX + 175, plotTop + plotH * 0.45, 'rgba(255,255,255,0.3)', 1, false);
+  drawLabel(ctx, '信心跃升', rightX + 202, plotTop + 35, '#888', 10);
+})();
+</script>
+
+</body>
+</html>

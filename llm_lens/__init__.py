@@ -17,10 +17,16 @@ try:
     from .extractor import ActivationExtractor, ExtractionResult
     from .logit_lens import LogitLens, LogitLensResult
     from .dynamics import LayerDynamics, DynamicsProfile
+    from .attention import HeadAnalyzer, HeadAnalysisResult
     from .behavior import BehaviorMapper, BehaviorReport
     from .cross_scale import CrossScaleAnalyzer, CriticalWindow
     from .compare import ReportComparator, ComparisonResult, CompareVisualizer
-    from .report_io import save_report, load_report
+    from .report_io import (
+        save_report, load_report,
+        save_class_centroids, load_class_centroids,
+        save_head_analysis, load_head_analysis,
+        load_probe_vectors,  # legacy (read-only) for old npz files
+    )
     from .visualizer import LensVisualizer
 except ImportError as e:
     import sys
