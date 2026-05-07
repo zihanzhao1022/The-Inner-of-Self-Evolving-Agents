@@ -1,0 +1,4 @@
+# Always check .bat files out with CRLF line endings — Windows cmd.exe
+# misparses commands like `setlocal` when the file uses LF endings.
+*.bat text eol=crlf
+*.cmd text eol=crlf

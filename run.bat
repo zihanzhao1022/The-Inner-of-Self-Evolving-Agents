@@ -1,11 +1,31 @@
 @echo off
-python -m llm_lens.examples.run_experiment --phase 1 --model Qwen/Qwen2.5-3B --output results/Qwen2.5-3B/20260422-1053
-python -m llm_lens.examples.run_experiment --phase 1 --model Qwen/Qwen2.5-3B-Instruct --output results/Qwen2.5-3B-Instruct/20260422-1053
-python -m llm_lens.examples.run_experiment --phase 1 --model andrewzh/Absolute_Zero_Reasoner-Coder-3b --output results/AZR-Coder-3B/20260422-1053
+setlocal
 
-python -m llm_lens.examples.run_comparison --base results/Qwen2.5-3B/20260422-1053/report_Qwen_Qwen2.5-3B.json --altered results/Qwen2.5-3B-Instruct/20260422-1053/report_Qwen_Qwen2.5-3B-Instruct.json --output results/Qwen2.5-3B_vs_Qwen2.5-3B-Instruct_20260422-1053
+REM ============================================================
+REM  Layer-wise Behavioral Dynamics — full experiment matrix
+REM    3 phase-1 runs (3B / 3B-Instruct / AZR-Coder-3B)
+REM  + 3 pairwise comparisons (probe / intensity / bifurcation
+REM                            / direction / BIC / norm
+REM                            / per-head / class-centroid)
+REM  All 6 outputs share one auto-generated timestamp.
+REM
+REM  Defaults:  --dataset condition_multiple  --max-per-class 200
+REM  Override on the command line, e.g.
+REM    run.bat --max-per-class 0          (full ~700/class)
+REM    run.bat --dataset default          (legacy 32-prompt set)
+REM    run.bat --skip-comparisons         (only phase 1)
+REM    run.bat --skip-phase1 --timestamp 20260505-2228   (re-do compares)
+REM ============================================================
 
-python -m llm_lens.examples.run_comparison --base results/Qwen2.5-3B/20260422-1053/report_Qwen_Qwen2.5-3B.json --altered results/AZR-Coder-3B/20260422-1053/report_andrewzh_Absolute_Zero_Reasoner-Coder-3b.json --output results/Qwen2.5-3B_vs_AZR-Coder-3B_20260422-1053
+python -m llm_lens.examples.run_all ^
+    --dataset condition_multiple ^
+    --max-per-class 200 ^
+    %*
 
-python -m llm_lens.examples.run_comparison --base results/Qwen2.5-3B-Instruct/20260422-1053/report_Qwen_Qwen2.5-3B-Instruct.json --altered results/AZR-Coder-3B/20260422-1053/report_andrewzh_Absolute_Zero_Reasoner-Coder-3b.json --output results/Qwen2.5-3B-Instruct_vs_AZR-Coder-3B_20260422-1053
+if errorlevel 1 (
+    echo.
+    echo [run.bat] run_all exited with errors.
+)
+
 pause
+endlocal

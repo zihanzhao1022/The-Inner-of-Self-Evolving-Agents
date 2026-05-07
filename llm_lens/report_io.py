@@ -382,6 +382,46 @@ def load_class_centroids(npz_path: str) -> dict:
     return data
 
 
+def find_artifacts_for_report(report_path: str) -> dict:
+    """Locate sibling .npz artifacts written by run_experiment for a given report JSON.
+
+    Layout convention:
+        <report_dir>/report_<model>.json
+        <report_dir>/class_centroids/<model_short>/<ts>.npz   <- expected
+        <report_dir>/head_analysis/<model_short>/<ts>.npz     <- optional
+
+    If multiple .npz files exist (multiple runs in the same directory), picks the
+    most recent by filename (which is itself a YYYYMMDD-HHMM timestamp).
+
+    Returns:
+        dict with optional keys 'centroids' / 'head_analysis' mapping to absolute .npz paths.
+        Missing artifacts are absent from the dict (not None).
+    """
+    parent = os.path.dirname(os.path.abspath(report_path))
+    found = {}
+
+    for kind, dirname in (("centroids", "class_centroids"),
+                           ("head_analysis", "head_analysis")):
+        kind_dir = os.path.join(parent, dirname)
+        if not os.path.isdir(kind_dir):
+            continue
+        # Walk one level: <kind_dir>/<model_short>/*.npz
+        candidates = []
+        for sub in os.listdir(kind_dir):
+            sub_dir = os.path.join(kind_dir, sub)
+            if not os.path.isdir(sub_dir):
+                continue
+            for fname in os.listdir(sub_dir):
+                if fname.endswith(".npz"):
+                    candidates.append(os.path.join(sub_dir, fname))
+        if candidates:
+            # Lexicographic sort happens to also be chronological for YYYYMMDD-HHMM names.
+            candidates.sort()
+            found[kind] = candidates[-1]
+
+    return found
+
+
 def save_head_analysis(head_result: HeadAnalysisResult, npz_path: str):
     """
     Save per-head analysis to .npz.

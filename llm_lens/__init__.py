@@ -25,6 +25,7 @@ try:
         save_report, load_report,
         save_class_centroids, load_class_centroids,
         save_head_analysis, load_head_analysis,
+        find_artifacts_for_report,
         load_probe_vectors,  # legacy (read-only) for old npz files
     )
     from .visualizer import LensVisualizer
