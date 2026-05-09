@@ -134,31 +134,28 @@ def main() -> None:
     print(f"\n[verify_weight_diff] output → {out_dir}")
 
     from transformers import AutoModelForCausalLM
+    from llm_lens.model_zoo import get_axis_pairs
     models = get_models(args.model_set)
     if len(models) < 4:
         raise ValueError(
-            f"need 4 models in quartet (base/inst/coder/AZR); got {len(models)}. "
+            f"need at least 4 models (base/inst/coder/AZR); got {len(models)}. "
             f"Update model_zoo.MODEL_SETS for {args.model_set!r}.")
 
-    # The three TRAINING-AXIS pairs we care about. Restricting to these (not
-    # all 6 cross-pairs) keeps RAM constant across the run: base+inst, then
-    # free inst, base+coder, free base, coder+azr.
-    base_full,  base_short  = models[0]
-    inst_full,  inst_short  = models[1]
-    coder_full, coder_short = models[2]
-    azr_full,   azr_short   = models[3]
-    print(f"  quartet: base={base_short}, inst={inst_short}, "
-          f"coder={coder_short}, azr={azr_short}")
+    short_to_full = {short: full for full, short in models}
+    axis_pairs_named = get_axis_pairs(args.model_set)
+    if not axis_pairs_named:
+        raise ValueError(f"get_axis_pairs returned empty for {args.model_set!r}")
+
+    print(f"  models ({len(models)}): {[s for _, s in models]}")
     print(f"  axis pairs:")
-    print(f"    RLHF:           {base_short:<22} ↔ {inst_short}")
-    print(f"    domain:         {base_short:<22} ↔ {coder_short}")
-    print(f"    self_evolving:  {coder_short:<22} ↔ {azr_short}")
+    for axis, (sa, sb) in axis_pairs_named.items():
+        print(f"    {axis:<28} {sa:<22} ↔ {sb}")
 
     n_comp = len(LAYER_COMPONENTS)
+    # Build pairs list as (short_a, short_b, full_a, full_b) per axis.
     pairs = [
-        ("base",  "inst",  base_full,  inst_full),    # RLHF axis
-        ("base",  "coder", base_full,  coder_full),   # domain axis
-        ("coder", "azr",   coder_full, azr_full),     # self-evolving axis
+        (sa, sb, short_to_full[sa], short_to_full[sb])
+        for axis, (sa, sb) in axis_pairs_named.items()
     ]
     heatmaps: dict[str, np.ndarray] = {f"{a}_{b}": None for a, b, *_ in pairs}
     diff_norms: dict[str, np.ndarray] = {f"{a}_{b}": None for a, b, *_ in pairs}
@@ -193,8 +190,16 @@ def main() -> None:
             del loaded[short]
             gc.collect()
 
-    # ── Process each axis pair, evicting models between to keep RAM low ────
-    for (a, b, a_full, b_full) in pairs:
+    # ── Process each axis pair, adaptively evicting models that won't be
+    # ── used in any future pair. Keeps peak RAM at ~2 model dicts.
+    def _short_used_in_remaining_pairs(short: str, remaining) -> bool:
+        for (a, b, *_rest) in remaining:
+            if short == a or short == b:
+                return True
+        return False
+
+    for idx, (a, b, a_full, b_full) in enumerate(pairs):
+        remaining = pairs[idx + 1:]
         wa = _ensure_loaded(a, a_full)
         wb = _ensure_loaded(b, b_full)
 
@@ -218,17 +223,12 @@ def main() -> None:
                 d[l_idx, c_idx] = matrix_diff_norm(wa[key], wb[key])
         heatmaps[pname]  = h
         diff_norms[pname] = d
-        print(f"    {pname}: done")
+        print(f"    {pname}: done", flush=True)
 
-        # Eviction: after RLHF (base, inst) we can drop inst; after domain
-        # (base, coder) we can drop base; coder stays for self-evolving.
-        if (a, b) == ("base", "inst"):
-            _evict("inst")
-        elif (a, b) == ("base", "coder"):
-            _evict("base")
-        elif (a, b) == ("coder", "azr"):
-            _evict("coder")
-            _evict("azr")
+        # Adaptive eviction: drop any short whose role is finished.
+        for short_to_check in [a, b]:
+            if not _short_used_in_remaining_pairs(short_to_check, remaining):
+                _evict(short_to_check)
 
     top_keys = top_cosines.pop("__top_keys")
 
@@ -248,15 +248,8 @@ def main() -> None:
         json.dump({
             "timestamp": out_ts, "model_set": args.model_set, "dtype": args.dtype,
             "num_layers": int(num_layers), "tie": bool(tie),
-            "models": {
-                "base": base_full, "inst": inst_full,
-                "coder": coder_full, "azr": azr_full,
-            },
-            "axis_pairs": {
-                "RLHF":          [base_short, inst_short],
-                "domain":        [base_short, coder_short],
-                "self_evolving": [coder_short, azr_short],
-            },
+            "models": {short: full for full, short in models},
+            "axis_pairs": {axis: list(pair) for axis, pair in axis_pairs_named.items()},
             "written_at": datetime.now().isoformat(),
         }, f, indent=2)
 
@@ -292,9 +285,13 @@ def main() -> None:
             txt = "  ".join(f"{k}={v:.4f}" for k, v in tc.items())
             ax.text(0.5, -0.08, f"top: {txt}", transform=ax.transAxes,
                     ha="center", va="top", fontsize=8)
+        axis_summary = "   ".join(
+            f"{axis} ({sa}↔{sb})"
+            for axis, (sa, sb) in axis_pairs_named.items()
+        )
         plt.suptitle(
-            "Per-(layer, component) weight cosine — three training axes\n"
-            "RLHF (base↔inst)   Domain (base↔coder)   Self-evolving (coder↔AZR)\n"
+            f"Per-(layer, component) weight cosine — {len(axis_pairs_named)} training axes\n"
+            f"{axis_summary}\n"
             "Green ≈ unchanged; Red = significantly retrained")
         plt.tight_layout()
         plt.savefig(out_dir / "weight_cosines_heatmap.png", dpi=120, bbox_inches="tight")
