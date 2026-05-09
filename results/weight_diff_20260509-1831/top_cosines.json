@@ -1,0 +1,28 @@
+{
+  "top_cosines": {
+    "base_inst": {
+      "embed": 0.9996908372504517,
+      "final_norm": 0.9999999999746301
+    },
+    "base_coder": {
+      "embed": 0.6190096532155792,
+      "final_norm": 0.9977136807112481
+    },
+    "coder_azr": {
+      "embed": 0.9999999849845782,
+      "final_norm": 0.9999999999999999
+    }
+  },
+  "tie_word_embeddings": true,
+  "components_order": [
+    "input_layernorm.weight",
+    "self_attn.q_proj.weight",
+    "self_attn.k_proj.weight",
+    "self_attn.v_proj.weight",
+    "self_attn.o_proj.weight",
+    "post_attention_layernorm.weight",
+    "mlp.gate_proj.weight",
+    "mlp.up_proj.weight",
+    "mlp.down_proj.weight"
+  ]
+}

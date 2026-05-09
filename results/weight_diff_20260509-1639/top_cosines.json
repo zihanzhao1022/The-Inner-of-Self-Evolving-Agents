@@ -1,0 +1,24 @@
+{
+  "top_cosines": {
+    "base_inst": {
+      "embed": 1.1200248003005981,
+      "final_norm": 0.9999998807907104
+    },
+    "base_azr": {
+      "embed": 0.6885603666305542,
+      "final_norm": 0.9977137446403503
+    }
+  },
+  "tie_word_embeddings": true,
+  "components_order": [
+    "input_layernorm.weight",
+    "self_attn.q_proj.weight",
+    "self_attn.k_proj.weight",
+    "self_attn.v_proj.weight",
+    "self_attn.o_proj.weight",
+    "post_attention_layernorm.weight",
+    "mlp.gate_proj.weight",
+    "mlp.up_proj.weight",
+    "mlp.down_proj.weight"
+  ]
+}

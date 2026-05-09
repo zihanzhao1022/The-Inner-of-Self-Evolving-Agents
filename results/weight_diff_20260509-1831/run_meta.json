@@ -1,0 +1,28 @@
+{
+  "timestamp": "20260509-1831",
+  "model_set": "3B",
+  "dtype": "bfloat16",
+  "num_layers": 36,
+  "tie": true,
+  "models": {
+    "base": "Qwen/Qwen2.5-3B",
+    "inst": "Qwen/Qwen2.5-3B-Instruct",
+    "coder": "Qwen/Qwen2.5-Coder-3B",
+    "azr": "andrewzh/Absolute_Zero_Reasoner-Coder-3b"
+  },
+  "axis_pairs": {
+    "RLHF": [
+      "Qwen2.5-3B",
+      "Qwen2.5-3B-Instruct"
+    ],
+    "domain": [
+      "Qwen2.5-3B",
+      "Qwen2.5-Coder-3B"
+    ],
+    "self_evolving": [
+      "Qwen2.5-Coder-3B",
+      "AZR-Coder-3B"
+    ]
+  },
+  "written_at": "2026-05-09T18:34:10.176206"
+}

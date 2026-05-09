@@ -1,0 +1,12 @@
+{
+  "timestamp": "20260509-1630",
+  "dataset": "cm_binary",
+  "max_per_class": 128,
+  "n_harmless": 128,
+  "n_harmful": 128,
+  "model_set": "3B",
+  "dtype": "float32",
+  "chat_template": "QWEN_MIN_CHAT_TEMPLATE (Arditi A1.3)",
+  "token_position": "post_instruction (last token of templated input)",
+  "written_at": "2026-05-09T16:38:14.528145"
+}

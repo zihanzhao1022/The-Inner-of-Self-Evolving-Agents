@@ -1,0 +1,13 @@
+{
+  "timestamp": "20260509-1639",
+  "model_set": "3B",
+  "dtype": "bfloat16",
+  "num_layers": 36,
+  "tie": true,
+  "models": {
+    "base": "Qwen/Qwen2.5-3B",
+    "inst": "Qwen/Qwen2.5-3B-Instruct",
+    "azr": "andrewzh/Absolute_Zero_Reasoner-Coder-3b"
+  },
+  "written_at": "2026-05-09T16:40:28.803260"
+}
