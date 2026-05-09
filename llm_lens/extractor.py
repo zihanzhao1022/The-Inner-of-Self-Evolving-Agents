@@ -13,6 +13,22 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 
+# Forced minimal Qwen ChatML template — applied identically to all models in
+# the trio (base / Instruct / AZR-Coder) so the post-instruction token aligns
+# across them. AZR-Coder's own tokenizer.chat_template is a no-op concat, and
+# Instruct's adds a long system message; both make cross-model comparison
+# meaningless. Strategy "A1.3" in the design notes.
+QWEN_MIN_CHAT_TEMPLATE = (
+    "<|im_start|>user\n{prompt}<|im_end|>\n"
+    "<|im_start|>assistant\n"
+)
+
+
+def apply_qwen_min_chat_template(prompt: str) -> str:
+    """Wrap a raw user prompt in the minimal Qwen ChatML template."""
+    return QWEN_MIN_CHAT_TEMPLATE.format(prompt=prompt)
+
+
 @dataclass
 class ExtractionResult:
     """All captured activations from a single forward pass."""
@@ -176,9 +192,26 @@ class ActivationExtractor:
         self._hooks = []
         self._result = None
 
-    def run(self, text: str) -> ExtractionResult:
-        """Forward pass with hook capture -> ExtractionResult."""
-        inputs = self.tokenizer(text, return_tensors="pt").to(self.device)
+    def run(self, text: str, apply_chat_template: bool = False) -> ExtractionResult:
+        """Forward pass with hook capture -> ExtractionResult.
+
+        Args:
+            text: raw user prompt.
+            apply_chat_template: if True, wrap `text` in the forced minimal
+                Qwen ChatML template (`QWEN_MIN_CHAT_TEMPLATE`) before
+                tokenisation. The captured `token_idx=-1` is then the
+                post-instruction position (the '\\n' immediately after
+                '<|im_start|>assistant\\n') — Arditi-style refusal-direction
+                extraction protocol.
+                When False (default), tokenises the text as-is — preserves
+                backward compatibility with Phase 1 / IBM 6-class experiments.
+        """
+        if apply_chat_template:
+            wrapped = apply_qwen_min_chat_template(text)
+            inputs = self.tokenizer(wrapped, return_tensors="pt",
+                                     add_special_tokens=False).to(self.device)
+        else:
+            inputs = self.tokenizer(text, return_tensors="pt").to(self.device)
         input_ids = inputs["input_ids"]
         tokens = [self.tokenizer.decode(t) for t in input_ids[0]]
 

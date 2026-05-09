@@ -1,28 +1,37 @@
 """
 Dataset loaders for llm_lens.
 
-Pluggable prompt sources. Two registered datasets at the moment:
+Pluggable prompt sources. Registered datasets:
 
-  - "default": the original 32 hand-curated prompts (4 tags × 8).
-                Kept verbatim so old experiments stay reproducible.
-
+  - "default": original 32 hand-curated prompts (4 tags × 8).
   - "condition_multiple": IBM activation-steering's condition_multiple.json
-                (6 categories × 700 train entries). Each entry is a paired
-                set of variants of the same imperative skeleton.
+        (6 categories × 700 train entries).
+  - "cm_binary": binary harmful/harmless split of condition_multiple.
+
+  Arditi-style sources (https://github.com/andyrdt/refusal_direction):
+  - "harmbench":           HarmBench standard behaviors (~200 harmful prompts)
+  - "alpaca":              Stanford Alpaca instructions (~52K harmless)
+  - "malicious_instruct":  Princeton SysML MaliciousInstruct (100 harmful)
+  - "advbench_harmful":    AdvBench goals as harmful-only set (~520)
+  - "arditi_combined":     concat of harmful sources + Alpaca harmless,
+                           sized to N each side (default 128, matching paper)
 
 Usage:
     from llm_lens.datasets import load_prompts
 
-    prompts = load_prompts("condition_multiple", max_per_class=200)
-    # -> dict[str, list[str]]
+    prompts = load_prompts("arditi_combined", max_per_class=128)
+    # -> {"harmful": [...128], "harmless": [...128]}
 
 Adding a new dataset: register a builder function in REGISTRY at the bottom.
 """
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import os
+import urllib.request
 from typing import Callable, Dict, List, Optional
 
 
@@ -183,11 +192,236 @@ def _load_condition_multiple(
     return out
 
 
+# ── Binary harmful/harmless split of condition_multiple ─────────────────────
+# Used for Arditi-style refusal-direction extraction. The 6 IBM categories
+# split cleanly into harmless (base / legal_opinion / health_consultation —
+# legitimate assistance requests) and harmful (sexual_content / hate_speech /
+# crime_planning — should-be-refused requests). Returns just two tags so
+# downstream code can do a single binary DiM instead of 15 pairwise ones.
+
+_CM_HARMLESS_FIELDS = ["base", "legal_opinion", "health_consultation"]
+_CM_HARMFUL_FIELDS  = ["sexual_content", "hate_speech", "crime_planning"]
+
+
+def _load_cm_binary(
+    max_per_class: Optional[int] = None,
+    split: str = "train",
+    dedup_cosine_threshold: float = 0.85,
+    **_kwargs,
+) -> Dict[str, List[str]]:
+    """Binary harmful/harmless split of condition_multiple.
+
+    Returns {"harmless": [...], "harmful": [...]}. Each list interleaves the
+    three sub-categories so downstream sub-sampling stays balanced across
+    them. `max_per_class` is the cap on the binary class total (not per
+    sub-category), matching how Arditi-style extractors take e.g. 128
+    harmful + 128 harmless.
+    """
+    full = _load_condition_multiple(
+        max_per_class=None,           # collect all, slice later
+        split=split,
+        dedup_cosine_threshold=dedup_cosine_threshold,
+    )
+
+    harmless: List[str] = []
+    harmful: List[str] = []
+    # Interleave so a max_per_class cap stays balanced across sub-categories.
+    n_per_field = max(len(full.get(f, [])) for f in _CM_FIELDS)
+    for i in range(n_per_field):
+        for f in _CM_HARMLESS_FIELDS:
+            if i < len(full.get(f, [])):
+                harmless.append(full[f][i])
+        for f in _CM_HARMFUL_FIELDS:
+            if i < len(full.get(f, [])):
+                harmful.append(full[f][i])
+
+    if max_per_class:
+        harmless = harmless[:max_per_class]
+        harmful  = harmful[:max_per_class]
+
+    return {"harmless": harmless, "harmful": harmful}
+
+
+# ── Arditi-style external datasets (cached on first fetch) ─────────────────
+# All URLs are public-repo raw URLs; no authentication required. PyArrow / HF
+# `datasets` are explicitly avoided here — see `value_eval.py` for context on
+# the Windows torch ↔ pyarrow segfault. Stored as plain JSON for safety.
+
+_DATASETS_CACHE_DIR = os.path.expanduser("~/.cache/llm_lens/datasets")
+os.makedirs(_DATASETS_CACHE_DIR, exist_ok=True)
+
+
+def _http_get(url: str, timeout: int = 60) -> bytes:
+    return urllib.request.urlopen(url, timeout=timeout).read()
+
+
+def _cache_path(name: str) -> str:
+    return os.path.join(_DATASETS_CACHE_DIR, f"{name}.json")
+
+
+def _load_harmbench(max_per_class: Optional[int] = None,
+                     **_kwargs) -> Dict[str, List[str]]:
+    """HarmBench standard behaviors (single tag: harmful).
+
+    Source: centerforaisafety/HarmBench, behaviors_text_all.csv. We keep
+    only `FunctionalCategory == "standard"` rows with empty ContextString
+    (i.e. self-contained imperatives — no multi-turn / image / context
+    string scenarios). ~200 prompts after filtering.
+    """
+    cache = _cache_path("harmbench_standard")
+    if not os.path.exists(cache):
+        url = ("https://raw.githubusercontent.com/centerforaisafety/HarmBench/"
+               "main/data/behavior_datasets/harmbench_behaviors_text_all.csv")
+        raw = _http_get(url).decode("utf-8")
+        rows = list(csv.DictReader(io.StringIO(raw)))
+        prompts = [
+            r["Behavior"].strip() for r in rows
+            if r.get("FunctionalCategory", "").strip() == "standard"
+            and not r.get("ContextString", "").strip()
+            and r.get("Behavior", "").strip()
+        ]
+        with open(cache, "w", encoding="utf-8") as f:
+            json.dump(prompts, f, ensure_ascii=False, indent=2)
+    with open(cache, encoding="utf-8") as f:
+        prompts = json.load(f)
+    if max_per_class:
+        prompts = prompts[:max_per_class]
+    return {"harmful": prompts}
+
+
+def _load_alpaca(max_per_class: Optional[int] = None,
+                  no_input_only: bool = True,
+                  **_kwargs) -> Dict[str, List[str]]:
+    """Stanford Alpaca instructions (single tag: harmless).
+
+    Source: tatsu-lab/stanford_alpaca, alpaca_data.json (raw on GitHub —
+    no PyArrow / HF datasets dependency). ~52K total. By default keeps
+    only items with empty `input` field, since post-instruction-token DiM
+    needs single-turn imperative form. Sampling is deterministic — first
+    N entries (file is shuffled in source).
+    """
+    cache = _cache_path("alpaca_instructions")
+    if not os.path.exists(cache):
+        url = ("https://raw.githubusercontent.com/tatsu-lab/stanford_alpaca/"
+               "main/alpaca_data.json")
+        raw = _http_get(url).decode("utf-8")
+        rows = json.loads(raw)
+        prompts = []
+        for r in rows:
+            if no_input_only and r.get("input", "").strip():
+                continue
+            instr = r.get("instruction", "").strip()
+            if instr:
+                prompts.append(instr)
+        with open(cache, "w", encoding="utf-8") as f:
+            json.dump(prompts, f, ensure_ascii=False)
+    with open(cache, encoding="utf-8") as f:
+        prompts = json.load(f)
+    if max_per_class:
+        prompts = prompts[:max_per_class]
+    return {"harmless": prompts}
+
+
+def _load_malicious_instruct(max_per_class: Optional[int] = None,
+                              **_kwargs) -> Dict[str, List[str]]:
+    """Princeton SysML MaliciousInstruct (100 harmful prompts, single tag)."""
+    cache = _cache_path("malicious_instruct")
+    if not os.path.exists(cache):
+        url = ("https://raw.githubusercontent.com/Princeton-SysML/"
+               "Jailbreak_LLM/main/data/MaliciousInstruct.txt")
+        raw = _http_get(url).decode("utf-8")
+        prompts = [ln.strip() for ln in raw.splitlines() if ln.strip()]
+        with open(cache, "w", encoding="utf-8") as f:
+            json.dump(prompts, f, ensure_ascii=False, indent=2)
+    with open(cache, encoding="utf-8") as f:
+        prompts = json.load(f)
+    if max_per_class:
+        prompts = prompts[:max_per_class]
+    return {"harmful": prompts}
+
+
+def _load_advbench_harmful(max_per_class: Optional[int] = None,
+                            **_kwargs) -> Dict[str, List[str]]:
+    """AdvBench `goal` field as a harmful-only refusal source.
+
+    Distinct from `value_eval.load_advbench`, which returns
+    (goal, target_compliance) pairs for likelihood scoring. Here we
+    just take the goals as harmful imperatives (~520 prompts).
+    """
+    cache = _cache_path("advbench_harmful")
+    if not os.path.exists(cache):
+        url = ("https://raw.githubusercontent.com/llm-attacks/llm-attacks/"
+               "main/data/advbench/harmful_behaviors.csv")
+        raw = _http_get(url).decode("utf-8")
+        rows = list(csv.DictReader(io.StringIO(raw)))
+        prompts = [r["goal"].strip() for r in rows if r.get("goal", "").strip()]
+        with open(cache, "w", encoding="utf-8") as f:
+            json.dump(prompts, f, ensure_ascii=False, indent=2)
+    with open(cache, encoding="utf-8") as f:
+        prompts = json.load(f)
+    if max_per_class:
+        prompts = prompts[:max_per_class]
+    return {"harmful": prompts}
+
+
+def _load_arditi_combined(
+    max_per_class: Optional[int] = 128,
+    harmful_sources: tuple = ("harmbench", "advbench", "malicious_instruct"),
+    seed: int = 0,
+    **_kwargs,
+) -> Dict[str, List[str]]:
+    """Arditi-style mixed split.
+
+    - harmful: round-robin sample from the listed sources (default
+      HarmBench + AdvBench + MaliciousInstruct), interleaved.
+    - harmless: Alpaca (no_input).
+    Sized to `max_per_class` per side (default 128, matching the paper).
+    """
+    src_loaders = {
+        "harmbench":           _load_harmbench,
+        "advbench":            _load_advbench_harmful,
+        "malicious_instruct":  _load_malicious_instruct,
+    }
+    pools: List[List[str]] = []
+    for s in harmful_sources:
+        if s not in src_loaders:
+            raise ValueError(f"unknown harmful source {s!r}")
+        pools.append(src_loaders[s]()["harmful"])
+
+    # Round-robin interleave so each source is represented proportionally.
+    harmful: List[str] = []
+    cursors = [0] * len(pools)
+    if max_per_class is None:
+        target = sum(len(p) for p in pools)
+    else:
+        target = max_per_class
+    while len(harmful) < target:
+        added_any = False
+        for i, p in enumerate(pools):
+            if cursors[i] < len(p):
+                harmful.append(p[cursors[i]])
+                cursors[i] += 1
+                added_any = True
+                if len(harmful) >= target:
+                    break
+        if not added_any:
+            break
+
+    harmless = _load_alpaca(max_per_class=max_per_class)["harmless"]
+    return {"harmful": harmful, "harmless": harmless}
+
+
 # ── Registry ────────────────────────────────────────────────────────────────
 
 REGISTRY: Dict[str, Callable[..., Dict[str, List[str]]]] = {
-    "default": _load_default,
-    "condition_multiple": _load_condition_multiple,
+    "default":             _load_default,
+    "condition_multiple":  _load_condition_multiple,
+    "cm_binary":           _load_cm_binary,
+    "harmbench":           _load_harmbench,
+    "alpaca":              _load_alpaca,
+    "malicious_instruct":  _load_malicious_instruct,
+    "advbench_harmful":    _load_advbench_harmful,
+    "arditi_combined":     _load_arditi_combined,
 }
 
 

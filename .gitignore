@@ -26,8 +26,16 @@ Thumbs.db
 .DS_Store
 desktop.ini
 
-# Heavy experiment outputs (regenerable; should not be in source tree)
-results/
+# Experiment outputs — published to GitHub for reproducibility, but exclude
+# the noisy intermediates: progress logs (stdout copies) and smoke-test
+# artefacts created during pipeline development (the proper N=128 quartet
+# runs supersede them).
+results/*.log
+results/refusal_direction_smoketest/
+results/refusal_direction_smoketest_v2/
+
+# Old phase-1 outputs accidentally written under llm_lens/examples/ before
+# the run_experiment.py output_dir fix. Regenerable.
 llm_lens/examples/AZR-Coder-3B/
 llm_lens/examples/Qwen_Qwen2.5-3B/
 

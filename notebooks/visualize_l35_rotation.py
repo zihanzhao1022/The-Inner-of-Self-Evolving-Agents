@@ -1,10 +1,13 @@
-"""Visualize the L35 representation-space rotation across the three 3B models.
+"""Visualize the L35 representation-space trajectory across the four 3B models
+in the quartet (Qwen2.5-3B / Instruct / Coder / AZR-Coder).
 
-Generates four figures into results/L35_rotation_<TS>/:
+Generates six figures into results/L35_rotation_<TS>/:
   1. centroids_panels_layers.png      — 6 panels at L0/8/18/28/33/35, joint PCA
   2. trajectory_3d_mean_class.png     — 3D path of each model's mean centroid through 36 layers
-  3. pairwise_distance_vs_layer.png   — same-class centroid distance vs layer (3 pairs)
+  3. pairwise_distance_vs_layer.png   — same-class centroid distance vs layer (6 pairs)
   4. displacement_L33_to_L35.png      — arrows showing the L33->L35 jump per (class, model)
+  5. procrustes_residual.png          — geometry mismatch after optimal rigid alignment, per pair
+  6. centroids_panels_layers_3d.png   — same as fig 1 but 3D PCA panels
 """
 
 import os
@@ -34,6 +37,7 @@ def main():
     REPORTS = {
         "Qwen2.5-3B":          os.path.join(DEST, "results", "Qwen2.5-3B", TS, "report_Qwen_Qwen2.5-3B.json"),
         "Qwen2.5-3B-Instruct": os.path.join(DEST, "results", "Qwen2.5-3B-Instruct", TS, "report_Qwen_Qwen2.5-3B-Instruct.json"),
+        "Qwen2.5-Coder-3B":    os.path.join(DEST, "results", "Qwen2.5-Coder-3B", TS, "report_Qwen_Qwen2.5-Coder-3B.json"),
         "AZR-Coder-3B":        os.path.join(DEST, "results", "AZR-Coder-3B", TS, "report_andrewzh_Absolute_Zero_Reasoner-Coder-3b.json"),
     }
     centroids = {s: load_class_centroids(find_artifacts_for_report(p)["centroids"])
@@ -61,12 +65,14 @@ def main():
     model_markers = {
         "Qwen2.5-3B":          "o",
         "Qwen2.5-3B-Instruct": "s",
+        "Qwen2.5-Coder-3B":    "D",   # diamond — Coder
         "AZR-Coder-3B":        "^",
     }
     model_edge = {
-        "Qwen2.5-3B":          "#000000",
-        "Qwen2.5-3B-Instruct": "#1976D2",
-        "AZR-Coder-3B":        "#D32F2F",
+        "Qwen2.5-3B":          "#000000",   # black — pure base
+        "Qwen2.5-3B-Instruct": "#1976D2",   # blue — RLHF
+        "Qwen2.5-Coder-3B":    "#388E3C",   # green — domain-pretrain (true base of AZR)
+        "AZR-Coder-3B":        "#D32F2F",   # red — self-evolving
     }
 
     class_handles = [Line2D([0], [0], marker="o", color="w",
@@ -106,7 +112,7 @@ def main():
     fig.legend(handles=class_handles + model_handles,
                loc="lower center", ncol=9, fontsize=10, frameon=False,
                bbox_to_anchor=(0.5, -0.02))
-    fig.suptitle("Class centroids in shared PCA — Base / Instruct stay aligned, AZR rotates at L35",
+    fig.suptitle("Class centroids in shared PCA across 4 models (Base / Inst / Coder / AZR)",
                  fontsize=15, fontweight="bold")
     fig.tight_layout()
     fig.subplots_adjust(bottom=0.08, top=0.93)
@@ -150,13 +156,25 @@ def main():
         d = np.linalg.norm(diff, axis=-1)
         return d.mean(axis=-1)
 
+    # 6 pairs total in the quartet. Highlight the three TRAINING-AXIS pairs
+    # in saturated colours; cross-axis pairs muted.
     pair_labels = [
-        (0, 1, "3B  vs  3B-Instruct"),
-        (0, 2, "3B  vs  AZR-Coder"),
-        (1, 2, "3B-Instruct  vs  AZR-Coder"),
+        (0, 1, "RLHF axis: 3B  vs  3B-Instruct"),
+        (0, 2, "domain axis: 3B  vs  Coder"),
+        (2, 3, "self-evolving axis: Coder  vs  AZR"),
+        (0, 3, "(cross) 3B  vs  AZR"),
+        (1, 2, "(cross) Instruct  vs  Coder"),
+        (1, 3, "(cross) Instruct  vs  AZR"),
     ]
     fig, ax = plt.subplots(figsize=(13, 6))
-    colors = ["#4CAF50", "#F44336", "#FF9800"]
+    colors = [
+        "#1976D2",   # RLHF — blue
+        "#388E3C",   # domain — green
+        "#D32F2F",   # self-evolving — red (the headline pair)
+        "#9E9E9E",   # cross 3B-AZR — grey
+        "#BCAAA4",   # cross Inst-Coder — light brown
+        "#CE93D8",   # cross Inst-AZR — light purple
+    ]
     for (ai, bi, lbl), col in zip(pair_labels, colors):
         d = pair_distances(ai, bi)
         ax.plot(np.arange(L), d, "o-", lw=2, ms=4, color=col, label=lbl)
@@ -169,7 +187,7 @@ def main():
     ax.axvline(35, color="gray", ls="--", alpha=0.5)
     ax.set_xlabel("Layer")
     ax.set_ylabel("Mean Euclidean distance between same-class centroids (joint PCA)")
-    ax.set_title("Cross-model centroid distance per layer — AZR diverges only at L35",
+    ax.set_title("Cross-model centroid distance per layer — quartet, 6 pairs",
                  fontsize=13, fontweight="bold")
     ax.legend(fontsize=11)
     ax.grid(True, alpha=0.3)
@@ -205,7 +223,7 @@ def main():
                      fontsize=12, fontweight="bold")
         ax.grid(True, alpha=0.3)
 
-    fig.suptitle("L33 -> L35 displacement of every (class x model) — AZR moves coherently in its own direction",
+    fig.suptitle("L33 -> L35 displacement of every (class x model) — quartet view",
                  fontsize=14, fontweight="bold")
     fig.legend(handles=class_handles + model_handles,
                loc="lower center", ncol=9, fontsize=9, frameon=False,
@@ -243,9 +261,12 @@ def main():
         return mtx1, mtx2, disparity
 
     pair_idx = [
-        (0, 1, "3B  vs  3B-Instruct",         "#4CAF50"),
-        (0, 2, "3B  vs  AZR-Coder",           "#F44336"),
-        (1, 2, "3B-Instruct  vs  AZR-Coder",  "#FF9800"),
+        (0, 1, "RLHF axis: 3B  vs  3B-Instruct",          "#1976D2"),
+        (0, 2, "domain axis: 3B  vs  Coder",               "#388E3C"),
+        (2, 3, "self-evolving axis: Coder  vs  AZR",       "#D32F2F"),
+        (0, 3, "(cross) 3B  vs  AZR",                      "#9E9E9E"),
+        (1, 2, "(cross) Instruct  vs  Coder",              "#BCAAA4"),
+        (1, 3, "(cross) Instruct  vs  AZR",                "#CE93D8"),
     ]
 
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
@@ -363,7 +384,7 @@ def main():
     fig.legend(handles=class_handles + model_handles,
                loc="lower center", ncol=9, fontsize=10, frameon=False,
                bbox_to_anchor=(0.5, -0.01))
-    fig.suptitle("Class centroids in shared PCA (3D) — PC3 is where Instruct stays with Base while AZR flips sign",
+    fig.suptitle("Class centroids in shared PCA (3D) — quartet view",
                  fontsize=15, fontweight="bold")
     fig.tight_layout()
     fig.subplots_adjust(bottom=0.08, top=0.93)
