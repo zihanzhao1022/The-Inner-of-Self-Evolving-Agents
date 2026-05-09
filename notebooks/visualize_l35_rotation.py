@@ -1,15 +1,23 @@
-"""Visualize the L35 representation-space trajectory across the four 3B models
-in the quartet (Qwen2.5-3B / Instruct / Coder / AZR-Coder).
+"""Visualize the late-layer representation-space trajectory across the
+post-training quartet/quintet (base / Instruct / Coder / AZR variants).
 
-Generates six figures into results/L35_rotation_<TS>/:
-  1. centroids_panels_layers.png      — 6 panels at L0/8/18/28/33/35, joint PCA
-  2. trajectory_3d_mean_class.png     — 3D path of each model's mean centroid through 36 layers
-  3. pairwise_distance_vs_layer.png   — same-class centroid distance vs layer (6 pairs)
-  4. displacement_L33_to_L35.png      — arrows showing the L33->L35 jump per (class, model)
-  5. procrustes_residual.png          — geometry mismatch after optimal rigid alignment, per pair
-  6. centroids_panels_layers_3d.png   — same as fig 1 but 3D PCA panels
+Generates six figures into results/L35_rotation_<TS>/ (or
+L27_rotation_<TS>/ for 7B etc.):
+  1. centroids_panels_layers.png      — 6 panels at depth ratios 0/0.22/0.5/0.78/0.92/1.0
+  2. trajectory_3d_mean_class.png     — 3D path of each model's mean centroid
+  3. pairwise_distance_vs_layer.png   — same-class centroid distance vs layer
+  4. displacement_LN-2_to_LN.png      — arrows showing the last-2-layers jump per (class, model)
+  5. procrustes_residual.png          — geometry mismatch after rigid alignment
+  6. centroids_panels_layers_3d.png   — fig 1 but 3D PCA panels
+
+Layer indices auto-derived from the loaded reports' num_layers (3B=36, 7B=28, 14B=48).
+
+CLI:
+  python notebooks/visualize_l35_rotation.py                            # 3B default
+  python notebooks/visualize_l35_rotation.py --model-set 7B --ts 20260510-XXXX
 """
 
+import argparse
 import os
 import sys
 import numpy as np
@@ -26,20 +34,36 @@ if _root not in sys.path:
     sys.path.insert(0, _root)
 
 from llm_lens.report_io import find_artifacts_for_report, load_class_centroids
+from llm_lens.model_zoo import get_models
 
 
 def main():
-    DEST = r"D:/Projects/The-Inner-of-Self-Evolving-Agents"
-    TS = "20260506-0000"
-    OUTDIR = os.path.join(DEST, "results", f"L35_rotation_{TS}")
-    os.makedirs(OUTDIR, exist_ok=True)
+    p = argparse.ArgumentParser(
+        description="Late-layer rotation viz (auto-adapts to 3B/7B/14B)")
+    p.add_argument("--model-set", default="3B", choices=["3B", "7B", "14B"])
+    p.add_argument("--ts", default="20260506-0000",
+                   help="Timestamp under results/<model_short>/<ts>/")
+    p.add_argument("--results-root", default=None,
+                   help="Override results/ root (default: <repo>/results)")
+    args = p.parse_args()
 
-    REPORTS = {
-        "Qwen2.5-3B":          os.path.join(DEST, "results", "Qwen2.5-3B", TS, "report_Qwen_Qwen2.5-3B.json"),
-        "Qwen2.5-3B-Instruct": os.path.join(DEST, "results", "Qwen2.5-3B-Instruct", TS, "report_Qwen_Qwen2.5-3B-Instruct.json"),
-        "Qwen2.5-Coder-3B":    os.path.join(DEST, "results", "Qwen2.5-Coder-3B", TS, "report_Qwen_Qwen2.5-Coder-3B.json"),
-        "AZR-Coder-3B":        os.path.join(DEST, "results", "AZR-Coder-3B", TS, "report_andrewzh_Absolute_Zero_Reasoner-Coder-3b.json"),
-    }
+    DEST = r"D:/Projects/The-Inner-of-Self-Evolving-Agents"
+    if args.results_root:
+        results_root = args.results_root
+    else:
+        results_root = os.path.join(DEST, "results")
+    TS = args.ts
+
+    # Build REPORTS from the model_zoo so the script auto-includes all
+    # members of the size set (quartet for 3B/14B, quintet for 7B).
+    REPORTS = {}
+    for full, short in get_models(args.model_set):
+        safe = full.replace("/", "_")
+        REPORTS[short] = os.path.join(results_root, short, TS,
+                                       f"report_{safe}.json")
+    OUTDIR = os.path.join(results_root, f"L35_rotation_{TS}")
+    os.makedirs(OUTDIR, exist_ok=True)
+    print(f"Loading {len(REPORTS)} models from TS={TS}, model_set={args.model_set}")
     centroids = {s: load_class_centroids(find_artifacts_for_report(p)["centroids"])
                  for s, p in REPORTS.items()}
 
@@ -62,18 +86,35 @@ def main():
         "hate_speech":         "#D32F2F",
         "crime_planning":      "#7B1FA2",
     }
-    model_markers = {
-        "Qwen2.5-3B":          "o",
-        "Qwen2.5-3B-Instruct": "s",
-        "Qwen2.5-Coder-3B":    "D",   # diamond — Coder
-        "AZR-Coder-3B":        "^",
+    # Adaptive marker / colour assignment by model role (inferred from short label).
+    # Anything unrecognised falls through to the "other" pool so 7B's AZR-Base-7B
+    # / arbitrary additions still get distinct visuals.
+    def _role_of(short: str) -> str:
+        s = short.lower()
+        if "instruct" in s:           return "instruct"
+        if "coder" in s and "azr" in s: return "azr_coder"
+        if "azr" in s and "base" in s: return "azr_base"
+        if "azr" in s:                return "azr"
+        if "coder" in s:              return "coder"
+        return "base"
+    role_marker = {
+        "base":      "o",   # circle
+        "instruct":  "s",   # square
+        "coder":     "D",   # diamond
+        "azr_base":  "v",   # downward triangle (only present in 7B quintet)
+        "azr_coder": "^",   # upward triangle
+        "azr":       "^",
     }
-    model_edge = {
-        "Qwen2.5-3B":          "#000000",   # black — pure base
-        "Qwen2.5-3B-Instruct": "#1976D2",   # blue — RLHF
-        "Qwen2.5-Coder-3B":    "#388E3C",   # green — domain-pretrain (true base of AZR)
-        "AZR-Coder-3B":        "#D32F2F",   # red — self-evolving
+    role_edge = {
+        "base":      "#000000",   # black
+        "instruct":  "#1976D2",   # blue (RLHF)
+        "coder":     "#388E3C",   # green (domain pretrain)
+        "azr_base":  "#FF6F00",   # orange (self-evolving direct)
+        "azr_coder": "#D32F2F",   # red (self-evolving via coder)
+        "azr":       "#D32F2F",
     }
+    model_markers = {m: role_marker[_role_of(m)] for m in models}
+    model_edge    = {m: role_edge[_role_of(m)]   for m in models}
 
     class_handles = [Line2D([0], [0], marker="o", color="w",
                             markerfacecolor=class_colors[t], markersize=12,
@@ -85,7 +126,18 @@ def main():
                      for m in models]
 
     # ── FIG 1: 6-panel snapshot at chosen layers ────────────────────────────
-    panel_layers = [0, 8, 18, 28, 33, 35]
+    # Pick 6 representative depths regardless of total layer count, including
+    # the very last layer and a near-last one to capture the late rotation.
+    panel_layers = sorted(set([
+        0,
+        max(1, int(round(L * 0.22))),
+        int(round(L * 0.50)),
+        int(round(L * 0.78)),
+        L - 3 if L >= 4 else max(0, L - 2),
+        L - 1,
+    ]))
+    last_layer = L - 1
+    second_last = max(0, L - 3)  # used for displacement plot
     fig, axes = plt.subplots(2, 3, figsize=(18, 12))
     axes = axes.flat
 
@@ -112,7 +164,7 @@ def main():
     fig.legend(handles=class_handles + model_handles,
                loc="lower center", ncol=9, fontsize=10, frameon=False,
                bbox_to_anchor=(0.5, -0.02))
-    fig.suptitle("Class centroids in shared PCA across 4 models (Base / Inst / Coder / AZR)",
+    fig.suptitle(f"Class centroids in shared PCA across {len(models)} models  ({args.model_set})",
                  fontsize=15, fontweight="bold")
     fig.tight_layout()
     fig.subplots_adjust(bottom=0.08, top=0.93)
@@ -134,14 +186,14 @@ def main():
         ax.scatter(*pts[-1], color=model_edge[m], s=400, marker="*",
                    edgecolor="black", lw=1.5, zorder=5)
         ax.text(pts[-1, 0], pts[-1, 1], pts[-1, 2] + 8,
-                f"{m} L35", fontsize=10, fontweight="bold",
+                f"{m} L{last_layer}", fontsize=10, fontweight="bold",
                 color=model_edge[m], ha="center")
         ax.text(pts[0, 0], pts[0, 1], pts[0, 2] - 8,
                 "L0", fontsize=8, color=model_edge[m], ha="center")
     ax.set_xlabel(f"PC1 ({ev[0]*100:.1f}%)")
     ax.set_ylabel(f"PC2 ({ev[1]*100:.1f}%)")
     ax.set_zlabel(f"PC3 ({ev[2]*100:.1f}%)")
-    ax.set_title("Mean-class centroid trajectory through 36 layers (joint PCA)",
+    ax.set_title(f"Mean-class centroid trajectory through {L} layers (joint PCA)",
                  fontsize=13, fontweight="bold")
     ax.legend(fontsize=10, loc="upper left")
     fig.tight_layout()
@@ -156,38 +208,58 @@ def main():
         d = np.linalg.norm(diff, axis=-1)
         return d.mean(axis=-1)
 
-    # 6 pairs total in the quartet. Highlight the three TRAINING-AXIS pairs
-    # in saturated colours; cross-axis pairs muted.
-    pair_labels = [
-        (0, 1, "RLHF axis: 3B  vs  3B-Instruct"),
-        (0, 2, "domain axis: 3B  vs  Coder"),
-        (2, 3, "self-evolving axis: Coder  vs  AZR"),
-        (0, 3, "(cross) 3B  vs  AZR"),
-        (1, 2, "(cross) Instruct  vs  Coder"),
-        (1, 3, "(cross) Instruct  vs  AZR"),
-    ]
+    # Build pair list: highlight named training-axis pairs in saturated
+    # colours, mute the rest. Works for any N-member set.
+    from llm_lens.model_zoo import get_axis_pairs
+    axis_pairs_named = get_axis_pairs(args.model_set)   # {axis_name: (short_a, short_b)}
+    short_to_idx = {m: i for i, m in enumerate(models)}
+
+    AXIS_COLORS = {
+        "RLHF":                    "#1976D2",
+        "domain":                  "#388E3C",
+        "self_evolving":           "#D32F2F",
+        "self_evolving_direct":    "#FF6F00",
+        "self_evolving_via_coder": "#D32F2F",
+        "cross_AZR":               "#9C27B0",
+    }
+    cross_palette = ["#9E9E9E", "#BCAAA4", "#CE93D8", "#A1887F", "#90A4AE", "#B0BEC5"]
+
+    pair_labels = []   # list of (ai, bi, lbl, color)
+    seen_pairs = set()
+    # Named axis pairs first
+    for axis, (sa, sb) in axis_pairs_named.items():
+        if sa not in short_to_idx or sb not in short_to_idx:
+            continue
+        ai, bi = sorted([short_to_idx[sa], short_to_idx[sb]])
+        if (ai, bi) in seen_pairs:
+            continue
+        col = AXIS_COLORS.get(axis, "#666666")
+        pair_labels.append((ai, bi, f"{axis}: {sa}  vs  {sb}", col))
+        seen_pairs.add((ai, bi))
+    # Remaining cross pairs (all C(N,2))
+    cross_idx = 0
+    for i in range(len(models)):
+        for j in range(i + 1, len(models)):
+            if (i, j) in seen_pairs:
+                continue
+            col = cross_palette[cross_idx % len(cross_palette)]
+            cross_idx += 1
+            pair_labels.append((i, j, f"(cross) {models[i]}  vs  {models[j]}", col))
+            seen_pairs.add((i, j))
+
     fig, ax = plt.subplots(figsize=(13, 6))
-    colors = [
-        "#1976D2",   # RLHF — blue
-        "#388E3C",   # domain — green
-        "#D32F2F",   # self-evolving — red (the headline pair)
-        "#9E9E9E",   # cross 3B-AZR — grey
-        "#BCAAA4",   # cross Inst-Coder — light brown
-        "#CE93D8",   # cross Inst-AZR — light purple
-    ]
-    for (ai, bi, lbl), col in zip(pair_labels, colors):
+    for (ai, bi, lbl, col) in pair_labels:
         d = pair_distances(ai, bi)
         ax.plot(np.arange(L), d, "o-", lw=2, ms=4, color=col, label=lbl)
-        # Annotate L35 value
-        ax.annotate(f"L35: {d[-1]:.0f}", xy=(35, d[-1]),
-                    xytext=(33, d[-1] + (max(d) * 0.06)),
+        ax.annotate(f"L{last_layer}: {d[-1]:.0f}", xy=(last_layer, d[-1]),
+                    xytext=(max(0, last_layer - 2), d[-1] + (max(d) * 0.06)),
                     fontsize=9, color=col,
                     arrowprops=dict(arrowstyle="->", color=col, alpha=0.6))
 
-    ax.axvline(35, color="gray", ls="--", alpha=0.5)
+    ax.axvline(last_layer, color="gray", ls="--", alpha=0.5)
     ax.set_xlabel("Layer")
     ax.set_ylabel("Mean Euclidean distance between same-class centroids (joint PCA)")
-    ax.set_title("Cross-model centroid distance per layer — quartet, 6 pairs",
+    ax.set_title(f"Cross-model centroid distance per layer — {len(models)} models, {len(pair_labels)} pairs",
                  fontsize=13, fontweight="bold")
     ax.legend(fontsize=11)
     ax.grid(True, alpha=0.3)
@@ -197,7 +269,7 @@ def main():
     plt.close(fig)
     print(f"  saved {out3}")
 
-    # ── FIG 4: L33 -> L35 displacement arrows ───────────────────────────────
+    # ── FIG 4: late-layer displacement arrows (Lsecond_last -> Llast_layer) ─
     fig, axes = plt.subplots(1, 2, figsize=(16, 7))
 
     for sub_idx, (pcA, pcB, lbl_ax) in enumerate([
@@ -207,36 +279,36 @@ def main():
         ax = axes[sub_idx]
         for mi, m in enumerate(models):
             for ci, t in enumerate(tags):
-                p33 = X_pca[mi, 33, ci, [pcA, pcB]]
-                p35 = X_pca[mi, 35, ci, [pcA, pcB]]
-                ax.annotate("", xy=p35, xytext=p33,
+                p_pre  = X_pca[mi, second_last, ci, [pcA, pcB]]
+                p_last = X_pca[mi, last_layer,  ci, [pcA, pcB]]
+                ax.annotate("", xy=p_last, xytext=p_pre,
                             arrowprops=dict(arrowstyle="->",
                                             color=model_edge[m],
                                             lw=1.6, alpha=0.85))
-                ax.scatter(*p33, c=class_colors[t], marker=model_markers[m],
+                ax.scatter(*p_pre, c=class_colors[t], marker=model_markers[m],
                            s=80, edgecolors=model_edge[m], lw=1.0, alpha=0.5)
-                ax.scatter(*p35, c=class_colors[t], marker=model_markers[m],
+                ax.scatter(*p_last, c=class_colors[t], marker=model_markers[m],
                            s=200, edgecolors=model_edge[m], lw=1.5)
         ax.set_xlabel(f"PC{pcA+1} ({ev[pcA]*100:.1f}%)")
         ax.set_ylabel(f"PC{pcB+1} ({ev[pcB]*100:.1f}%)")
-        ax.set_title(f"L33 -> L35 displacement ({lbl_ax})",
+        ax.set_title(f"L{second_last} -> L{last_layer} displacement ({lbl_ax})",
                      fontsize=12, fontweight="bold")
         ax.grid(True, alpha=0.3)
 
-    fig.suptitle("L33 -> L35 displacement of every (class x model) — quartet view",
+    fig.suptitle(f"L{second_last} -> L{last_layer} displacement of every (class x model)",
                  fontsize=14, fontweight="bold")
     fig.legend(handles=class_handles + model_handles,
                loc="lower center", ncol=9, fontsize=9, frameon=False,
                bbox_to_anchor=(0.5, -0.04))
     fig.tight_layout()
     fig.subplots_adjust(bottom=0.12, top=0.90)
-    out4 = os.path.join(OUTDIR, "displacement_L33_to_L35.png")
+    out4 = os.path.join(OUTDIR, f"displacement_L{second_last}_to_L{last_layer}.png")
     fig.savefig(out4, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"  saved {out4}")
 
     # ── FIG 5: Procrustes residual per layer ────────────────────────────────
-    # Tests whether the apparent L35 displacement is "just rigid transform"
+    # Tests whether the apparent late-layer displacement is "just rigid"
     # (small residual after optimal rotate+scale+translate) or genuine shape
     # change of the 6-class geometry (large residual).
     from scipy.spatial import procrustes as scipy_procrustes
@@ -260,14 +332,10 @@ def main():
         mtx1, mtx2, disparity = scipy_procrustes(A_local, B_local)
         return mtx1, mtx2, disparity
 
-    pair_idx = [
-        (0, 1, "RLHF axis: 3B  vs  3B-Instruct",          "#1976D2"),
-        (0, 2, "domain axis: 3B  vs  Coder",               "#388E3C"),
-        (2, 3, "self-evolving axis: Coder  vs  AZR",       "#D32F2F"),
-        (0, 3, "(cross) 3B  vs  AZR",                      "#9E9E9E"),
-        (1, 2, "(cross) Instruct  vs  Coder",              "#BCAAA4"),
-        (1, 3, "(cross) Instruct  vs  AZR",                "#CE93D8"),
-    ]
+    # Reuse the dynamic pair_labels list built earlier for fig 3 — same shape
+    # (ai, bi, lbl, col), so all axis pairs (3 for quartet, 5 for quintet)
+    # plus all cross pairs are included.
+    pair_idx = list(pair_labels)
 
     fig, axes = plt.subplots(1, 2, figsize=(16, 6))
 
@@ -304,13 +372,13 @@ def main():
         pair_post_cos[(ai, bi)]  = post_cos
 
         ax.plot(np.arange(L), residual, "o-", lw=2, ms=4, color=col, label=lbl)
-        ax.annotate(f"L35: {residual[-1]:.4f}",
-                    xy=(35, residual[-1]),
-                    xytext=(28, residual[-1] + max(residual) * 0.08),
+        ax.annotate(f"L{last_layer}: {residual[-1]:.4f}",
+                    xy=(last_layer, residual[-1]),
+                    xytext=(max(0, last_layer - 7), residual[-1] + max(residual) * 0.08),
                     fontsize=9, color=col,
                     arrowprops=dict(arrowstyle="->", color=col, alpha=0.6))
 
-    ax.axvline(35, color="gray", ls="--", alpha=0.5)
+    ax.axvline(last_layer, color="gray", ls="--", alpha=0.5)
     ax.set_xlabel("Layer")
     ax.set_ylabel("Procrustes disparity (lower = same shape)")
     ax.set_title("Shape mismatch after optimal rigid alignment\n"
@@ -330,7 +398,7 @@ def main():
         ax.plot(np.arange(L), post_cos, "--", lw=2.2, color=col,
                 label=f"{lbl} (Procrustes-aligned)")
 
-    ax.axvline(35, color="gray", ls="--", alpha=0.5)
+    ax.axvline(last_layer, color="gray", ls="--", alpha=0.5)
     ax.set_xlabel("Layer")
     ax.set_ylabel("Mean centroid cosine across 6 classes")
     ax.set_title("Cosine before vs after optimal rigid alignment\n"
@@ -384,7 +452,7 @@ def main():
     fig.legend(handles=class_handles + model_handles,
                loc="lower center", ncol=9, fontsize=10, frameon=False,
                bbox_to_anchor=(0.5, -0.01))
-    fig.suptitle("Class centroids in shared PCA (3D) — quartet view",
+    fig.suptitle(f"Class centroids in shared PCA (3D) — {len(models)} models ({args.model_set})",
                  fontsize=15, fontweight="bold")
     fig.tight_layout()
     fig.subplots_adjust(bottom=0.08, top=0.93)
@@ -393,26 +461,33 @@ def main():
     plt.close(fig)
     print(f"  saved {out6}")
 
-    # ── Quantify the rotation: per-pair angle of mean L35 displacement ──────
-    print("\nL33 -> L35 displacement vector statistics (joint PCA, top-3 PCs):")
+    # ── Quantify the rotation: per-pair angle of mean late-layer displacement
+    print(f"\nL{second_last} -> L{last_layer} displacement vector statistics (joint PCA, top-3 PCs):")
     for mi, m in enumerate(models):
-        v = X_pca[mi, 35].mean(0) - X_pca[mi, 33].mean(0)   # (3,)
+        v = X_pca[mi, last_layer].mean(0) - X_pca[mi, second_last].mean(0)
         print(f"  {m:22s}  Δmean = ({v[0]:+.1f}, {v[1]:+.1f}, {v[2]:+.1f})  ‖Δ‖={np.linalg.norm(v):.1f}")
 
-    print("\nAngle (degrees) between L33->L35 mean displacement vectors:")
-    vs = [X_pca[mi, 35].mean(0) - X_pca[mi, 33].mean(0) for mi in range(M)]
+    print(f"\nAngle (degrees) between L{second_last}->L{last_layer} mean displacement vectors:")
+    vs = [X_pca[mi, last_layer].mean(0) - X_pca[mi, second_last].mean(0) for mi in range(M)]
     for i in range(M):
         for j in range(i + 1, M):
             cos = np.dot(vs[i], vs[j]) / (np.linalg.norm(vs[i]) * np.linalg.norm(vs[j]) + 1e-10)
             ang = np.degrees(np.arccos(np.clip(cos, -1, 1)))
             print(f"  {models[i]:22s} vs {models[j]:22s}: cos={cos:+.3f}  angle={ang:.1f}°")
 
-    # Procrustes residual at key layers (reuse cache)
+    # Procrustes residual at key depths (4 sample points distributed through the depth)
+    key_layers = sorted(set([
+        0,
+        int(round(L * 0.5)),
+        max(0, last_layer - 2),
+        last_layer,
+    ]))
     print("\nProcrustes disparity at key layers (lower = more identical shape after optimal rigid alignment):")
-    print(f"  {'pair':35s}  L0       L18      L33      L35")
+    header = f"  {'pair':45s}  " + "   ".join(f"L{l:>2}".ljust(8) for l in key_layers)
+    print(header)
     for ai, bi, lbl, _ in pair_idx:
-        row = [f"{pair_residuals[(ai, bi)][Li]:.4f}" for Li in [0, 18, 33, 35]]
-        print(f"  {lbl:35s}  " + "   ".join(row))
+        row = [f"{pair_residuals[(ai, bi)][Li]:.4f}" for Li in key_layers]
+        print(f"  {lbl:45s}  " + "   ".join(row))
 
     print(f"\nAll outputs in: {OUTDIR}")
 

@@ -33,10 +33,16 @@ MODEL_SETS: dict[str, list[tuple[str, str]]] = {
         ("Qwen/Qwen2.5-Coder-3B",                      "Qwen2.5-Coder-3B"),
         ("andrewzh/Absolute_Zero_Reasoner-Coder-3b",   "AZR-Coder-3B"),
     ],
+    # 7B has a 5-member quintet because andrewzh2 published an additional
+    # AZR-Base-7B variant (presumably trained on plain Qwen2.5-7B without
+    # the Coder continued-pretraining step). This lets us directly test
+    # the "Coder pretraining provides robustness against self-evolving
+    # drift" hypothesis: compare base→AZR-Base vs Coder→AZR-Coder.
     "7B": [
         ("Qwen/Qwen2.5-7B",                            "Qwen2.5-7B"),
         ("Qwen/Qwen2.5-7B-Instruct",                   "Qwen2.5-7B-Instruct"),
         ("Qwen/Qwen2.5-Coder-7B",                      "Qwen2.5-Coder-7B"),
+        ("andrewzh2/Absolute_Zero_Reasoner-Base-7b",   "AZR-Base-7B"),
         ("andrewzh/Absolute_Zero_Reasoner-Coder-7b",   "AZR-Coder-7B"),
     ],
     "14B": [
@@ -77,22 +83,44 @@ def get_compare_pairs(model_set: str = DEFAULT_MODEL_SET) -> list[tuple[str, str
 
 
 def get_axis_pairs(model_set: str = DEFAULT_MODEL_SET) -> dict[str, tuple[str, str]]:
-    """Return the three named training-axis pairs by short label.
+    """Return the named training-axis pairs by short label.
 
-    Requires the new 4-member quartet ordering: [base, instruct, coder, AZR].
+    For a 4-member quartet (3B/14B): [base, Instruct, Coder, AZR-Coder]
+        RLHF                : base ↔ Instruct
+        domain              : base ↔ Coder
+        self_evolving       : Coder ↔ AZR-Coder
+
+    For a 5-member quintet (7B): [base, Instruct, Coder, AZR-Base, AZR-Coder]
+        RLHF                : base ↔ Instruct
+        domain              : base ↔ Coder
+        self_evolving_direct: base ↔ AZR-Base
+        self_evolving_via_coder: Coder ↔ AZR-Coder
+        +cross_AZR (optional): AZR-Base ↔ AZR-Coder (do the two RL paths
+            converge?)
     """
     models = get_models(model_set)
-    if len(models) < 4:
-        # Fall back to legacy 3-member trio (base, instruct, AZR) if Coder
-        # not present — this is for compatibility with old CLI invocations,
-        # but axis dissection is meaningless without Coder.
+    n = len(models)
+    if n < 4:
         return {}
-    base, instruct, coder, azr = (m[1] for m in models[:4])
-    return {
-        "RLHF":           (base, instruct),
-        "domain":         (base, coder),
-        "self_evolving":  (coder, azr),
-    }
+    if n == 4:
+        base, instruct, coder, azr = (m[1] for m in models[:4])
+        return {
+            "RLHF":           (base, instruct),
+            "domain":         (base, coder),
+            "self_evolving":  (coder, azr),
+        }
+    if n == 5:
+        base, instruct, coder, azr_base, azr_coder = (m[1] for m in models[:5])
+        return {
+            "RLHF":                    (base, instruct),
+            "domain":                  (base, coder),
+            "self_evolving_direct":    (base, azr_base),
+            "self_evolving_via_coder": (coder, azr_coder),
+            "cross_AZR":               (azr_base, azr_coder),
+        }
+    # Unknown N — return only RLHF / domain since they're well-defined.
+    base, instruct, coder = (m[1] for m in models[:3])
+    return {"RLHF": (base, instruct), "domain": (base, coder)}
 
 
 def parse_dtype(name: str) -> torch.dtype:
