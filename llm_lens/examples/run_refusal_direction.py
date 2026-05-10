@@ -115,6 +115,12 @@ def extract_for_model(
           f"best_acc={best_acc:.4f} at (pos=-{eoi_len-best_pos}, L{int(best_layer)}); "
           f"emergence (98% peak, unpruned) = L{emerg_layer}")
 
+    # Raw residuals at best (pos, layer) — for sample-level scatter plots.
+    # Cheap to keep: (N, D) per side, ~5 MB at 7B bf16. Per-prompt rather
+    # than per-(pos, layer) — only the chosen slice.
+    raw_safe_best  = safe_resid[:, best_pos, best_layer, :].astype(np.float32)
+    raw_harm_best  = harm_resid[:, best_pos, best_layer, :].astype(np.float32)
+
     # Free GPU
     del ext
     if torch.cuda.is_available():
@@ -131,6 +137,9 @@ def extract_for_model(
         # Means kept for sanity / cross-checks (no full N×n_pos×L×D dump)
         "harmless_mean": safe_resid.astype(np.float64).mean(axis=0).astype(np.float32),
         "harmful_mean":  harm_resid.astype(np.float64).mean(axis=0).astype(np.float32),
+        # Raw residuals at best (pos, layer) — used by single-model scatter plots.
+        "raw_safe_best": raw_safe_best,        # (N_harmless, D)
+        "raw_harm_best": raw_harm_best,        # (N_harmful,  D)
     }
 
 
@@ -335,6 +344,10 @@ def main() -> None:
         **{f"{k}__probe_acc":  v["probe_acc"]  for k, v in per_model.items()},
         **{f"{k}__safe_mean":  v["harmless_mean"] for k, v in per_model.items()},
         **{f"{k}__harm_mean":  v["harmful_mean"]  for k, v in per_model.items()},
+        **{f"{k}__raw_safe_best": v["raw_safe_best"] for k, v in per_model.items()},
+        **{f"{k}__raw_harm_best": v["raw_harm_best"] for k, v in per_model.items()},
+        **{f"{k}__best_pos":   np.array([v["best_pos_idx"]]) for k, v in per_model.items()},
+        **{f"{k}__best_layer": np.array([v["best_layer"]])   for k, v in per_model.items()},
         **{f"cos__{name.replace(' vs ', '__')}": cos
            for name, cos in cos_pairs.items()},
     )
