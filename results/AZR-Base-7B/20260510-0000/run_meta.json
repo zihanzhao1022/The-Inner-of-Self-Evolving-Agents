@@ -1,0 +1,16 @@
+{
+  "model_name": "andrewzh2/Absolute_Zero_Reasoner-Base-7b",
+  "dataset": "condition_multiple",
+  "max_per_class": 200,
+  "timestamp": "20260510-0000",
+  "sample_counts": {
+    "base": 200,
+    "legal_opinion": 200,
+    "health_consultation": 200,
+    "sexual_content": 200,
+    "hate_speech": 200,
+    "crime_planning": 200
+  },
+  "capture_heads": true,
+  "written_at": "2026-05-10T14:21:57"
+}
