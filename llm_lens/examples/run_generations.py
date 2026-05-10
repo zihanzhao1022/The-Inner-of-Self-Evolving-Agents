@@ -1,12 +1,21 @@
 #!/usr/bin/env python3
 """
-Generate text outputs from each model in the quartet/quintet for behavioural
-refusal evaluation.
+Generate text outputs (incl. chain-of-thought) from each model in the
+quartet/quintet for behavioural refusal evaluation.
 
 Why: the rest of the pipeline only captures activations (residual stream,
 refusal direction, probe accuracy). For real refusal-behaviour analysis we
 need actual `model.generate()` outputs, then can pipe to a classifier or
 LLM-judge to score refusal rate / compliance / over-refusal.
+
+Also captures **chain-of-thought** content. AZR's reported "uh-oh moment"
+lives in CoT (per the paper's qualitative example), so:
+  - max_new_tokens defaults to 512 — long enough for full reasoning chains
+  - record stores the raw generation text verbatim (no stripping of
+    <think>...</think> tags or "Step 1: ..." structure)
+  - regex-based cot_pattern_detected boolean flagged when the generation
+    contains common CoT markers (DeepSeek-R1 <think>, "Let's think step
+    by step", numbered steps, etc.)
 
 Pipeline per model:
     1. Load model on GPU
@@ -72,6 +81,37 @@ def _build_prompt_set(n_harmful: int = 100, n_harmless: int = 50,
     for i, p in enumerate(harmless):
         items.append({"class": "harmless", "prompt_idx": i, "prompt": p})
     return items
+
+
+import re
+
+# Patterns that indicate explicit chain-of-thought structure in a generation.
+# Detection is heuristic; scoring how "reasoning-like" the output is would
+# need an LLM judge. We just record whether any of these markers appear, so
+# downstream analysis can filter on cot_pattern_detected=True.
+_COT_PATTERNS = [
+    re.compile(r"<think>.*?</think>", re.DOTALL),                 # DeepSeek-R1-style
+    re.compile(r"<\|begin_of_thought\|>.*?<\|end_of_thought\|>", re.DOTALL),
+    re.compile(r"Let'?s think step.{0,5}step", re.IGNORECASE),
+    re.compile(r"step\s*1[:.\s]", re.IGNORECASE),                  # numbered steps
+    re.compile(r"first[,\s].*?second[,\s].*?third", re.IGNORECASE | re.DOTALL),
+    re.compile(r"reasoning[:\s]", re.IGNORECASE),
+    re.compile(r"chain[ -]of[ -]thought", re.IGNORECASE),
+]
+
+
+def detect_cot_structure(text: str) -> dict:
+    """Return a dict of detected CoT markers + a coarse boolean."""
+    matches = []
+    for pat in _COT_PATTERNS:
+        if pat.search(text):
+            matches.append(pat.pattern[:40])
+    return {
+        "cot_pattern_detected": bool(matches),
+        "cot_patterns_matched": matches,
+        "n_lines": text.count("\n") + 1,
+        "n_chars": len(text),
+    }
 
 
 def _atomic_append_jsonl(path: str, record: dict) -> None:
@@ -152,6 +192,7 @@ def generate_for_model(
         stop_reason = "eos" if (n_new < max_new_tokens or
                                 gen_ids[-1].item() == tok.eos_token_id) else "max_tokens"
 
+        cot_info = detect_cot_structure(generation)
         record = {
             "model":         short,
             "class":         it["class"],
@@ -161,6 +202,7 @@ def generate_for_model(
             "n_new_tokens":  n_new,
             "stop_reason":   stop_reason,
             "wrapping":      "QWEN_MIN_CHAT_TEMPLATE",
+            **cot_info,
         }
         _atomic_append_jsonl(out_path, record)
 
@@ -194,7 +236,11 @@ def main():
                    help="Number of harmful prompts (cm_binary harmful tag)")
     p.add_argument("--n-harmless", type=int, default=50,
                    help="Number of harmless prompts (cm_binary harmless tag)")
-    p.add_argument("--max-new-tokens", type=int, default=256)
+    p.add_argument("--max-new-tokens", type=int, default=512,
+                   help="Long enough to capture chain-of-thought reasoning "
+                        "(AZR's 'uh-oh moment' lives in CoT). 512 default "
+                        "covers most reasoning chains; bump to 1024 if you "
+                        "see truncation in stop_reason='max_tokens'.")
     p.add_argument("--targets", nargs="+", default=None,
                    help="Subset of model short labels to run (default: all)")
     p.add_argument("--results-root", default="results")
