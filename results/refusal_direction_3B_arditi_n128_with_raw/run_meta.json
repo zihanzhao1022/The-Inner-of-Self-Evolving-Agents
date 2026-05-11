@@ -1,0 +1,32 @@
+{
+  "timestamp": "3B_arditi_n128_with_raw",
+  "dataset": "arditi_combined",
+  "max_per_class": 128,
+  "n_harmless": 128,
+  "n_harmful": 128,
+  "eoi_len": 5,
+  "model_set": "3B",
+  "dtype": "float32",
+  "chat_template": "QWEN_MIN_CHAT_TEMPLATE (forced minimal Qwen ChatML)",
+  "axis_pairs": {
+    "RLHF": [
+      "Qwen2.5-3B",
+      "Qwen2.5-3B-Instruct"
+    ],
+    "domain": [
+      "Qwen2.5-3B",
+      "Qwen2.5-Coder-3B"
+    ],
+    "self_evolving": [
+      "Qwen2.5-Coder-3B",
+      "AZR-Coder-3B"
+    ]
+  },
+  "arditi_alignment": {
+    "token_position": "full eoi_toks range, 5 positions [-5..-1]",
+    "dim_dtype": "float64 accumulation, float32 storage",
+    "layer_pruning": "last 20% of layers excluded from emergence/best-layer search",
+    "best_layer_metric": "probe_acc (observational); NOT Arditi causal ablation"
+  },
+  "written_at": "2026-05-11T09:32:03.120437"
+}
