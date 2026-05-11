@@ -173,8 +173,13 @@ def main() -> None:
         nonlocal num_layers, tie
         if short in loaded:
             return loaded[short]
-        print(f"\n  Loading {short} ({full})...")
-        m = AutoModelForCausalLM.from_pretrained(full, dtype=dtype, device_map="cpu")
+        print(f"\n  Loading {short} ({full})...", flush=True)
+        # low_cpu_mem_usage=True loads weights into a meta tensor first,
+        # then materialises directly in bf16. Avoids the default 2x peak
+        # (full fp32 alloc + bf16 conversion) that has been OOMing 7B
+        # runs on 32 GB Windows boxes.
+        m = AutoModelForCausalLM.from_pretrained(
+            full, dtype=dtype, device_map="cpu", low_cpu_mem_usage=True)
         if num_layers is None:
             num_layers = m.config.num_hidden_layers
             tie = bool(getattr(m.config, "tie_word_embeddings", False))
@@ -190,13 +195,16 @@ def main() -> None:
             del loaded[short]
             gc.collect()
 
-    # ── Process each axis pair, adaptively evicting models that won't be
-    # ── used in any future pair. Keeps peak RAM at ~2 model dicts.
-    def _short_used_in_remaining_pairs(short: str, remaining) -> bool:
-        for (a, b, *_rest) in remaining:
-            if short == a or short == b:
-                return True
-        return False
+    # ── Process each axis pair. Strict eviction: keep only the model
+    # ── needed for the NEXT pair, evict everything else. Peak RAM 2 dicts
+    # ── at any time, accepting some re-loads. 7B bf16 alone makes 3-model
+    # ── peak unrealistic with 32 GB system RAM + transient load overhead.
+    def _short_used_in_next_pair(short: str, remaining) -> bool:
+        if not remaining:
+            return False
+        next_pair = remaining[0]
+        a_next, b_next = next_pair[0], next_pair[1]
+        return short == a_next or short == b_next
 
     for idx, (a, b, a_full, b_full) in enumerate(pairs):
         remaining = pairs[idx + 1:]
@@ -225,9 +233,10 @@ def main() -> None:
         diff_norms[pname] = d
         print(f"    {pname}: done", flush=True)
 
-        # Adaptive eviction: drop any short whose role is finished.
+        # Strict eviction: only keep models needed by the NEXT pair.
+        # Re-load if needed in subsequent pairs.
         for short_to_check in [a, b]:
-            if not _short_used_in_remaining_pairs(short_to_check, remaining):
+            if not _short_used_in_next_pair(short_to_check, remaining):
                 _evict(short_to_check)
 
     top_keys = top_cosines.pop("__top_keys")
