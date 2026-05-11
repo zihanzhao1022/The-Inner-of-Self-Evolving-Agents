@@ -1,0 +1,23 @@
+{
+  "Qwen2.5-7B": {
+    "best_pos_idx": 3,
+    "best_layer": 21,
+    "n_total": 50,
+    "n_clean": 31,
+    "n_degenerate": 19,
+    "n_refused": 1,
+    "n_soft_refused": 0,
+    "refusal_rate": 0.03225806451612903,
+    "harmful_n_clean": 20,
+    "harmful_refusal_rate": 0.0,
+    "auc_across_class": 0.0,
+    "auc_within_harmful": null,
+    "null_auc_across_mean": 0.5166666666666667,
+    "null_auc_across_std": 0.3694590640382233,
+    "null_auc_within_mean": null,
+    "null_auc_within_std": null,
+    "z_within_harm": null,
+    "mean_proj_refused": -14.28079183656745,
+    "mean_proj_comply": 3.0434257084406173
+  }
+}

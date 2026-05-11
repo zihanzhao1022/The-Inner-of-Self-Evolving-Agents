@@ -1,0 +1,12 @@
+{
+  "Qwen2.5-7B": {
+    "best_pos": 3,
+    "best_layer": 21,
+    "direction_norm": 11.688720568505715
+  },
+  "Qwen2.5-Coder-7B": {
+    "best_pos": 3,
+    "best_layer": 9,
+    "direction_norm": 6.438185966306438
+  }
+}

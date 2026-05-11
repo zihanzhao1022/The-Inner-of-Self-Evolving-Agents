@@ -1,0 +1,24 @@
+{
+  "Qwen2.5-7B": {
+    "best_pos_idx": 3,
+    "best_layer": 21,
+    "n_total": 50,
+    "n_clean": 31,
+    "n_degenerate": 19,
+    "n_refused": 1,
+    "refusal_rate": 0.03225806451612903,
+    "harmful_n": 20,
+    "harmful_refusal_rate": 0.0,
+    "harmless_n": 11,
+    "harmless_refusal_rate": 0.09090909090909091,
+    "pearson_r_proj_refusal": -0.36285662305059363,
+    "pearson_p": 0.044830344499463506,
+    "auc_proj_as_classifier": 0.0,
+    "mean_proj_refused": -14.28079183656745,
+    "std_proj_refused": 0.0,
+    "mean_proj_comply": 3.0434257084406173,
+    "std_proj_comply": 7.990636933513627,
+    "welch_t": NaN,
+    "welch_p": NaN
+  }
+}

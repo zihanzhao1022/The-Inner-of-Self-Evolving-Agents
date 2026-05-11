@@ -1,0 +1,34 @@
+{
+  "size": "7B",
+  "donors": [],
+  "recipients": [
+    "Qwen2.5-7B",
+    "Qwen2.5-Coder-7B"
+  ],
+  "non_donors": [
+    "Qwen2.5-7B",
+    "Qwen2.5-Coder-7B"
+  ],
+  "cross_cosine_matrix": {
+    "rows": [],
+    "cols": [],
+    "values": []
+  },
+  "transfer_auc_matrix": {
+    "rows_donor": [],
+    "cols_recipient": [
+      "Qwen2.5-7B",
+      "Qwen2.5-Coder-7B"
+    ],
+    "values": []
+  },
+  "cos_arditi_x_behaviour_per_donor": {},
+  "n_refused_harmful_per_model": {
+    "Qwen2.5-7B": 0,
+    "Qwen2.5-Coder-7B": 0
+  },
+  "n_comply_harmful_per_model": {
+    "Qwen2.5-7B": 20,
+    "Qwen2.5-Coder-7B": 2
+  }
+}

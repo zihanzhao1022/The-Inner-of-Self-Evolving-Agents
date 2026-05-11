@@ -1,0 +1,96 @@
+{
+  "size": "3B",
+  "donors": [
+    "Qwen2.5-3B",
+    "Qwen2.5-3B-Instruct",
+    "Qwen2.5-Coder-3B"
+  ],
+  "recipients": [
+    "AZR-Coder-3B",
+    "Qwen2.5-3B",
+    "Qwen2.5-3B-Instruct",
+    "Qwen2.5-Coder-3B"
+  ],
+  "non_donors": [
+    "AZR-Coder-3B"
+  ],
+  "cross_cosine_matrix": {
+    "rows": [
+      "Qwen2.5-3B",
+      "Qwen2.5-3B-Instruct",
+      "Qwen2.5-Coder-3B"
+    ],
+    "cols": [
+      "Qwen2.5-3B",
+      "Qwen2.5-3B-Instruct",
+      "Qwen2.5-Coder-3B"
+    ],
+    "values": [
+      [
+        1.0,
+        0.05286823400253508,
+        0.03403008093369826
+      ],
+      [
+        0.05286823400253508,
+        1.0,
+        -0.060946929081730425
+      ],
+      [
+        0.03403008093369826,
+        -0.060946929081730425,
+        1.0000000000000002
+      ]
+    ]
+  },
+  "transfer_auc_matrix": {
+    "rows_donor": [
+      "Qwen2.5-3B",
+      "Qwen2.5-3B-Instruct",
+      "Qwen2.5-Coder-3B"
+    ],
+    "cols_recipient": [
+      "AZR-Coder-3B",
+      "Qwen2.5-3B",
+      "Qwen2.5-3B-Instruct",
+      "Qwen2.5-Coder-3B"
+    ],
+    "values": [
+      [
+        1.0,
+        0.8746438746438746,
+        0.5993761140819964,
+        0.5555555555555556
+      ],
+      [
+        0.23529411764705888,
+        0.5390313390313389,
+        0.7219251336898396,
+        0.32407407407407407
+      ],
+      [
+        0.8235294117647058,
+        0.5686609686609686,
+        0.4193404634581106,
+        0.9444444444444444
+      ]
+    ]
+  },
+  "cos_arditi_x_behaviour_per_donor": {
+    "Qwen2.5-3B": 0.12180916646069606,
+    "Qwen2.5-3B-Instruct": -0.0033966332970457747,
+    "Qwen2.5-Coder-3B": 0.3208805918393214
+  },
+  "n_refused_harmful_per_model": {
+    "AZR-Coder-3B": 1,
+    "Qwen2.5-3B": 39,
+    "Qwen2.5-3B-Instruct": 34,
+    "Qwen2.5-Coder-3B": 6
+  },
+  "n_comply_harmful_per_model": {
+    "AZR-Coder-3B": 17,
+    "Qwen2.5-3B": 45,
+    "Qwen2.5-3B-Instruct": 66,
+    "Qwen2.5-Coder-3B": 18
+  }
+}

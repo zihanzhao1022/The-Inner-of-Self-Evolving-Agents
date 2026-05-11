@@ -1,0 +1,22 @@
+{
+  "AZR-Coder-3B": {
+    "best_pos": 2,
+    "best_layer": 27,
+    "direction_norm": 5.5046106711844045
+  },
+  "Qwen2.5-3B": {
+    "best_pos": 0,
+    "best_layer": 27,
+    "direction_norm": 8.907859023584129
+  },
+  "Qwen2.5-3B-Instruct": {
+    "best_pos": 2,
+    "best_layer": 20,
+    "direction_norm": 1.6169357919172935
+  },
+  "Qwen2.5-Coder-3B": {
+    "best_pos": 4,
+    "best_layer": 27,
+    "direction_norm": 8.700061241739784
+  }
+}
