@@ -1,0 +1,40 @@
+{
+  "timestamp": "7B_cm_binary_n128_with_raw",
+  "dataset": "cm_binary",
+  "max_per_class": 128,
+  "n_harmless": 128,
+  "n_harmful": 128,
+  "eoi_len": 5,
+  "model_set": "7B",
+  "dtype": "bfloat16",
+  "chat_template": "QWEN_MIN_CHAT_TEMPLATE (forced minimal Qwen ChatML)",
+  "axis_pairs": {
+    "RLHF": [
+      "Qwen2.5-7B",
+      "Qwen2.5-7B-Instruct"
+    ],
+    "domain": [
+      "Qwen2.5-7B",
+      "Qwen2.5-Coder-7B"
+    ],
+    "self_evolving_direct": [
+      "Qwen2.5-7B",
+      "AZR-Base-7B"
+    ],
+    "self_evolving_via_coder": [
+      "Qwen2.5-Coder-7B",
+      "AZR-Coder-7B"
+    ],
+    "cross_AZR": [
+      "AZR-Base-7B",
+      "AZR-Coder-7B"
+    ]
+  },
+  "arditi_alignment": {
+    "token_position": "full eoi_toks range, 5 positions [-5..-1]",
+    "dim_dtype": "float64 accumulation, float32 storage",
+    "layer_pruning": "last 20% of layers excluded from emergence/best-layer search",
+    "best_layer_metric": "probe_acc (observational); NOT Arditi causal ablation"
+  },
+  "written_at": "2026-05-11T10:40:10.911468"
+}
