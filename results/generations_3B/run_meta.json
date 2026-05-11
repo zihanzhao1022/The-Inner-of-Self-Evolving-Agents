@@ -1,0 +1,41 @@
+{
+  "timestamp": "3B",
+  "model_set": "3B",
+  "dtype": "float32",
+  "n_harmful": 35,
+  "n_harmless": 15,
+  "max_new_tokens": 512,
+  "wrapping": "QWEN_MIN_CHAT_TEMPLATE (forced minimal Qwen ChatML)",
+  "decoding": "do_sample=False (greedy)",
+  "summaries": {
+    "Qwen2.5-3B": {
+      "n_done": 50,
+      "n_skipped": 0,
+      "n_new": 0,
+      "elapsed_sec": 0.0,
+      "out_path": "results\\generations_3B\\Qwen2.5-3B\\generations.jsonl"
+    },
+    "Qwen2.5-3B-Instruct": {
+      "n_done": 50,
+      "n_skipped": 0,
+      "n_new": 0,
+      "elapsed_sec": 0.0,
+      "out_path": "results\\generations_3B\\Qwen2.5-3B-Instruct\\generations.jsonl"
+    },
+    "Qwen2.5-Coder-3B": {
+      "n_done": 50,
+      "n_skipped": 0,
+      "n_new": 50,
+      "elapsed_sec": 8037.400127887726,
+      "out_path": "results\\generations_3B\\Qwen2.5-Coder-3B\\generations.jsonl"
+    },
+    "AZR-Coder-3B": {
+      "n_done": 50,
+      "n_skipped": 0,
+      "n_new": 50,
+      "elapsed_sec": 7926.219288349152,
+      "out_path": "results\\generations_3B\\AZR-Coder-3B\\generations.jsonl"
+    }
+  },
+  "written_at": "2026-05-11T04:32:08.353326"
+}
