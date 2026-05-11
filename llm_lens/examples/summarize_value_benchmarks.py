@@ -41,11 +41,28 @@ PRESENTATION = {
     },
 }
 
-MODEL_ORDER = ["Qwen2.5-3B", "Qwen2.5-3B-Instruct", "AZR-Coder-3B"]
+MODEL_ORDER = [
+    "Qwen2.5-3B",
+    "Qwen2.5-3B-Instruct",
+    "Qwen2.5-Coder-3B",
+    "AZR-Coder-3B",
+    # 7B (for future runs)
+    "Qwen2.5-7B",
+    "Qwen2.5-7B-Instruct",
+    "Qwen2.5-Coder-7B",
+    "AZR-Base-7B",
+    "AZR-Coder-7B",
+]
 PRETTY_NAME = {
     "Qwen2.5-3B":          "Qwen2.5-3B (base)",
     "Qwen2.5-3B-Instruct": "Qwen2.5-3B-Instruct (RLHF)",
+    "Qwen2.5-Coder-3B":    "Qwen2.5-Coder-3B (domain)",
     "AZR-Coder-3B":        "AZR-Coder-3B (self-evolved)",
+    "Qwen2.5-7B":          "Qwen2.5-7B (base)",
+    "Qwen2.5-7B-Instruct": "Qwen2.5-7B-Instruct (RLHF)",
+    "Qwen2.5-Coder-7B":    "Qwen2.5-Coder-7B (domain)",
+    "AZR-Base-7B":         "AZR-Base-7B (self-evolved direct)",
+    "AZR-Coder-7B":        "AZR-Coder-7B (self-evolved via Coder)",
 }
 BASE_KEY = "Qwen2.5-3B"
 

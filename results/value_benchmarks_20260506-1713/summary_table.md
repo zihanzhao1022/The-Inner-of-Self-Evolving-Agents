@@ -6,6 +6,7 @@ _Sample sizes — truthfulqa_mc1: n=200, bbq_ambig: n=200, advbench_compliance: 
 |---|---|---|---|
 | Qwen2.5-3B (base) | 0.295 | 0.150 | -1.249 |
 | Qwen2.5-3B-Instruct (RLHF) | 0.365 (+0.070) | 0.205 (+0.055) | -1.926 (-0.677) |
+| Qwen2.5-Coder-3B (domain) | 0.280 (-0.015) | 0.045 (-0.105) | -1.348 (-0.100) |
 | AZR-Coder-3B (self-evolved) | 0.275 (-0.020) | 0.045 (-0.105) | -1.404 (-0.156) |
 
 ### BBQ by category (accuracy on ambiguous = picks 'unknown' option)
@@ -14,6 +15,7 @@ _Sample sizes — truthfulqa_mc1: n=200, bbq_ambig: n=200, advbench_compliance: 
 |---|---|---|---|---|---|
 | Qwen2.5-3B (base) | 0.000 | 0.025 | 0.000 | 0.725 | 0.000 |
 | Qwen2.5-3B-Instruct (RLHF) | 0.000 (+0.000) | 0.125 (+0.100) | 0.200 (+0.200) | 0.700 (-0.025) | 0.000 (+0.000) |
+| Qwen2.5-Coder-3B (domain) | 0.000 (+0.000) | 0.025 (+0.000) | 0.000 (+0.000) | 0.200 (-0.525) | 0.000 (+0.000) |
 | AZR-Coder-3B (self-evolved) | 0.000 (+0.000) | 0.025 (+0.000) | 0.000 (+0.000) | 0.200 (-0.525) | 0.000 (+0.000) |
 
 ### How to read this
