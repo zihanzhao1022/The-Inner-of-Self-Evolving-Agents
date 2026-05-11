@@ -191,23 +191,37 @@ Plot: `steering_transfer_curves.png` shows the "Procrustes-rotated ≈ AZR-nativ
 - 3B Coder-3B addendum (n=200): `results/value_benchmarks_coder_n200/`
 - 3B full-N (Qwen-base, Instruct, AZR-Coder, native sample sizes 200–1000): `results/value_benchmarks_20260506-2150/`
 
-**Trio (n=200 each)**:
+**Full quartet (n=200 each, combining the trio at `20260506-1713` with the Coder addendum at `coder_n200`)**:
 
 | Model | TruthfulQA MC1 ↑ | BBQ ambig acc ↑ | AdvBench logP(comply) ↓ |
 |---|---|---|---|
 | Qwen2.5-3B (base) | 0.295 | 0.150 | -1.249 |
 | Qwen2.5-3B-Instruct (RLHF) | 0.365 (+0.070) | 0.205 (+0.055) | -1.926 (-0.677) |
+| **Qwen2.5-Coder-3B (domain)** | **0.280 (-0.015)** | **0.045 (-0.105)** | **-1.348 (-0.099)** |
 | AZR-Coder-3B (self-evolved) | 0.275 (-0.020) | 0.045 (-0.105) | -1.404 (-0.156) |
 
-AZR Δ vs Base ≈ 0 on every metric **except BBQ Religion**:
+**Δ Coder → AZR (the actual self-evolving axis)**:
+
+| Bench | Δ Coder→AZR |
+|---|---|
+| TruthfulQA MC1 | -0.005 |
+| BBQ ambig | 0.000 |
+| AdvBench logP | -0.056 |
+
+**Self-evolving on value benchmarks is essentially silent.** Every apparent "AZR drift" relative to base was actually introduced by the Coder pretraining step, not by self-evolving RL. Coder ≈ AZR on every metric.
+
+**BBQ by category — full quartet**:
 
 | Model | Age | Gender_id | Race_eth | Religion | Disability |
 |---|---|---|---|---|---|
 | Qwen2.5-3B | 0.000 | 0.025 | 0.000 | **0.725** | 0.000 |
 | Instruct | 0.000 | 0.125 | 0.200 | **0.700** | 0.000 |
+| **Coder-3B** | **0.000** | **0.025** | **0.000** | **0.200** | **0.000** |
 | AZR-Coder | 0.000 | 0.025 | 0.000 | **0.200** | 0.000 |
 
-The BBQ-Religion outlier (Coder/AZR 0.20 vs base 0.72) is **almost certainly a likelihood-of-phrase artifact**: the "Cannot be determined" / "Not enough info" choice has high pretraining-corpus likelihood in religious contexts, and Coder pretraining (continued on code corpus) shifts that. **The drift originates from the Coder step, not the self-evolving step** (see `value_benchmarks_coder_n200/` for Coder-3B's own scores).
+Coder = AZR exactly on Religion (both 0.200). The BBQ-Religion outlier is **almost certainly a likelihood-of-phrase artifact**: the "Cannot be determined" / "Not enough info" choice has high pretraining-corpus likelihood in religious contexts, and Coder's continued pretraining on a code corpus shifts that prior. **The drift originates from Coder, not from self-evolving.** Don't report "AZR is more biased" without the Religion-stripped breakdown.
+
+> **File note**: `value_benchmarks_coder_n200/results.json` contains the full Coder-3B numbers, but `value_benchmarks_coder_n200/summary_table.md` is empty ("no models in results") because `summarize_value_benchmarks.py` expected trio format. Use `results.json` directly.
 
 ### 3.2 Generations (refusal rate per model, n_total=50–150)
 

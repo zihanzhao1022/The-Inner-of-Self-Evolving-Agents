@@ -194,23 +194,37 @@
 - 3B Coder-3B 补充（n=200）：`results/value_benchmarks_coder_n200/`
 - 3B 完整 N（Qwen-base、Instruct、AZR-Coder，原生样本量 200–1000）：`results/value_benchmarks_20260506-2150/`
 
-**Trio（n=200 each）**：
+**完整四模型组（n=200 each，trio at `20260506-1713` + Coder 补充 at `coder_n200`）**：
 
 | Model | TruthfulQA MC1 ↑ | BBQ ambig acc ↑ | AdvBench logP(comply) ↓ |
 |---|---|---|---|
 | Qwen2.5-3B（base） | 0.295 | 0.150 | -1.249 |
 | Qwen2.5-3B-Instruct（RLHF） | 0.365（+0.070） | 0.205（+0.055） | -1.926（-0.677） |
+| **Qwen2.5-Coder-3B（domain）** | **0.280（-0.015）** | **0.045（-0.105）** | **-1.348（-0.099）** |
 | AZR-Coder-3B（自演化） | 0.275（-0.020） | 0.045（-0.105） | -1.404（-0.156） |
 
-AZR Δ vs Base 在所有指标上 ≈ 0，**除了 BBQ Religion**：
+**Δ Coder → AZR（真正的自演化轴）**：
+
+| Bench | Δ Coder→AZR |
+|---|---|
+| TruthfulQA MC1 | -0.005 |
+| BBQ ambig | 0.000 |
+| AdvBench logP | -0.056 |
+
+**自演化在 value benchmarks 上几乎完全沉默。** 所有看起来像 "AZR 相对 base 的漂移" 实际上都来自 Coder pretraining 阶段，不是来自自演化。Coder ≈ AZR 在每个指标上。
+
+**BBQ 分类细分 — 完整四模型组**：
 
 | Model | Age | Gender_id | Race_eth | Religion | Disability |
 |---|---|---|---|---|---|
 | Qwen2.5-3B | 0.000 | 0.025 | 0.000 | **0.725** | 0.000 |
 | Instruct | 0.000 | 0.125 | 0.200 | **0.700** | 0.000 |
+| **Coder-3B** | **0.000** | **0.025** | **0.000** | **0.200** | **0.000** |
 | AZR-Coder | 0.000 | 0.025 | 0.000 | **0.200** | 0.000 |
 
-BBQ-Religion 异常（Coder/AZR 0.20 vs base 0.72）**几乎可以确定是 phrase-likelihood 假象**："Cannot be determined" / "Not enough info" 选项在宗教相关上下文中的预训练语料似然偏高；Coder pretraining（继续在 code corpus 上训练）平移了这个似然。**漂移源自 Coder 阶段、不是自演化阶段**（见 `value_benchmarks_coder_n200/`，Coder-3B 自己的分数）。
+Coder = AZR 在 Religion 上完全相同（都是 0.200）。BBQ-Religion 异常**几乎可以确定是 phrase-likelihood 假象**："Cannot be determined" / "Not enough info" 选项在宗教相关上下文中的预训练语料似然偏高；Coder 在 code corpus 上的继续预训练平移了这个先验。**漂移源自 Coder 阶段，不是自演化阶段。** 不要在没剔除 Religion 的情况下报告 "AZR 更有偏见"。
+
+> **文件注记**：`value_benchmarks_coder_n200/results.json` 包含完整 Coder-3B 数据，但 `value_benchmarks_coder_n200/summary_table.md` 是空的（"no models in results"），因为 `summarize_value_benchmarks.py` 预期 trio 格式。请直接用 `results.json`。
 
 ### 3.2 生成（每模型拒绝率，n_total = 50–150）
 
