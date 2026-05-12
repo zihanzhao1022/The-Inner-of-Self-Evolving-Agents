@@ -339,6 +339,45 @@
 - 7B 上 emergence layer 模式跟 3B 一致：Coder family 比 non-Coder family 早 5–6 层。
 - AZR-Base-7B 既不在 Coder family 也不在 non-Coder family：它的 emergence layer (L14) 跟 plain base 相同，但 acc 峰值跟 Coder family 一样高 — 它继承 base 的 depth 但 self-evolving 让 quality 提升。
 
+**7B Emergence layer curves**：
+
+![7B probe emergence + prune zone](refusal_direction_7B_cm_binary_n128_with_raw/fig_emergence_curve.png)
+
+**看什么**：5 条曲线 + 每条上的垂直虚线（emergence layer）+ horizontal 98% threshold + prune zone 阴影。
+
+**关键观察**：emergence layer 标记 — AZR-Coder-7B L8、Coder-7B L9、AZR-Base-7B L15、plain Qwen2.5-7B L14、Instruct L12。**5 个模型分裂为 2 cluster**：
+- Coder family (Coder + AZR-Coder)：emergence 在 L8-9（深度 29%-32%）
+- non-Coder family (base + Instruct + AZR-Base)：emergence 在 L12-15（深度 43%-54%）
+
+**解读**：emergence layer 提前 ~5 层是 **Coder pretraining 的特征**，不是 self-evolving。AZR-Base-7B (no Coder path) 的 emergence 跟 plain base 几乎相同（L15 vs L14），证实 self-evolving 不改 refusal 出现的深度。AZR-Coder-7B (via Coder) 继承 Coder 的浅层 emergence (L8)。**Coder pretraining 是 emergence depth 的关键决定因素**。
+
+**7B Probe accuracy heatmap**：
+
+![7B probe acc heatmap (5 models)](refusal_direction_7B_cm_binary_n128_with_raw/fig_probe_acc_heatmap.png)
+
+**看什么**：5 panel (5 个 7B 模型)，每 panel 是 5 行 × 28 列 = 5 个 pos × 28 个 layer 的 probe acc heatmap。色越深 = acc 越高。
+
+**关键观察**：
+- 所有 5 个模型在 **pos -2 / -3 / -4 行**最深，跟 norm heatmap 一致 — refusal direction 在这几个 token 位置最 informative。
+- **Coder family (Coder, AZR-Coder)** 的 heatmap 从 L8 开始就深绿（acc 0.95+），更早达到 plateau。
+- **non-Coder family (base, AZR-Base, Instruct)** 的深色起始位置在 L12-15，更晚。
+- AZR-Base-7B 的 pattern 介于 base 和 Coder 之间但更靠近 base。
+
+**解读**：可视化 emergence pattern 的 (pos × layer) 联合分布。**5 个模型的 best (pos, layer) 在 heatmap 上是各自最深格子**，对应 §2.2 表的 (pos, layer) 列。
+
+**7B Norm heatmap**：
+
+![7B refusal direction norm heatmap (5 models)](refusal_direction_7B_cm_binary_n128_with_raw/fig_norm_heatmap.png)
+
+**看什么**：5 panel × (5 pos × 28 layer) heatmap。每 cell = ‖refusal direction‖。
+
+**关键观察**：
+- pos -2 / -3 行最深（norm 最大），跟 3B 一致。
+- prune zone (L22+，最后 20%) norm 暴增。
+- **5 个 7B 模型的 norm landscape 几乎一致** — 这个 magnitude pattern 是 Qwen2.5 架构特征，不被任何训练改变。
+
+**解读**：跟 3B norm_heatmap 同样模式 — refusal direction magnitude 是 architecture-specific，不依赖训练 step。这是为什么我们能在跨规模 cross-model 比较 refusal direction 余弦（norm 一致 → cosine 测量公平）。
+
 #### 关键图（per-model 单模型可视化 + group 可视化）
 
 **Single-model viz 例子**（AZR-Coder-3B）：4 类可视化。
@@ -390,6 +429,57 @@
 **关键观察**：4 条轨迹在 L0-L10 几乎重合（同向移动），L10-L25 分散到 3D 空间不同区域，L25-L33 再次趋同，L33-L35 又分散。**Coder ↔ AZR-Coder 的两条轨迹整体很接近**（self-evolving silence 的 3D 可视化）；base ↔ Instruct 的两条轨迹也接近。
 
 **解读**：refusal direction 的"演化轨迹"在 4 个模型间不是同步的，但同族（Coder family / non-Coder family）模型的轨迹相近。这跟 §2.1 displacement arrow 的发现一致。
+
+#### 关键图（7B per-model + group viz）
+
+**AZR-Base-7B scatter（self-evolving direct 控制实验关键图）**：
+
+![AZR-Base-7B scatter at best (pos, layer)](refusal_direction_7B_cm_binary_n128_with_raw/viz_singlemodel/AZR-Base-7B_scatter.png)
+
+**看什么**：AZR-Base-7B 的 128 harmful + 128 harmless prompts 在 best (pos=-2, L15) 处的 raw residual，投影到 PC1×PC2。绿 = harmless, 红 = harmful。
+
+**关键观察**：跟 3B AZR-Coder-3B scatter 同样 pattern — **harmful/harmless 在 PC1×PC2 几乎完全重叠**，但 probe acc = 0.974。refusal direction 仍是 sub-percent variance signal。
+
+**解读**：AZR-Base-7B（无 Coder 路径的 self-evolving）跟 AZR-Coder-7B 一样，refusal direction 在 PC1×PC2 不可见但 probe 仍能高精度 decode。**self-evolving 不论走哪条路径，refusal sub-percent variance 信号都保留**。
+
+**AZR-Coder-7B vs class centroids**（refusal 的语义构成）：
+
+![AZR-Coder-7B refusal vs 6 class centroids](refusal_direction_7B_cm_binary_n128_with_raw/viz_singlemodel/AZR-Coder-7B_vs_class.png)
+
+**看什么**：x = layer (0-27)，y = cos(refusal direction at pos=-2, class centroid)。6 条曲线对应 6 个 IBM class。
+
+**关键观察**：
+- **3 个"明显有害"类（hate_speech 红、crime_planning 紫、sexual_content 黄）的曲线在 mid-layer 处有正向 peak**（cos ≈ 0.10-0.15）。
+- **3 个"无害"类（base 灰、health 蓝、legal 蓝）曲线在 mid-layer 处是负的或近 0**。
+- 早层 (L0-L5) 6 条曲线都在 0.05-0.13 一团（refusal direction 对各类都有弱投影，未 differentiate）。
+- mid-layer (L8-L13) 有害类和无害类**显著分开**：有害正向、无害负向。
+- L15-L20 再次混合，L25+ 进入 prune zone 极端波动。
+
+**解读**：AZR-Coder-7B 的 refusal direction 在 mid-layer **明确指向有害类的方向** — 不是抽象的"refuse"概念，而是"有害类的代表方向"。这跟 3B AZR-Coder 的模式一致。**7B 复制了 refusal direction 的语义构成**：refusal = harmful 类的 mean direction，跟 cm_binary 数据集的设计一致。
+
+**7B group scatter (5 模型同图)**：
+
+![7B group scatter (5 models, best layer)](refusal_direction_7B_cm_binary_n128_with_raw/viz_group/group_scatter.png)
+
+**看什么**：5 个 7B 模型 × 2 类 = 10 colors，每模型 256 prompts 投影到 5-model joint PCA。
+
+**关键观察**：5 个模型形成 5 个 lobe（跟 §2.1 L25 centroid 图一致），但每 lobe 内 harmful/harmless 看不出视觉分离。**AZR-Base-7B 的 lobe 跟 plain base 相邻**（同 family）；AZR-Coder-7B 的 lobe 跟 Coder-7B 相邻。
+
+**解读**：再次确认 inter-model 差异远大于 within-model harmful/harmless 差异 — refusal direction 是 sub-percent variance。**5 模型在 PCA 上的分组反映 self-evolving silence**（每个 AZR 跟它的 base 临近）。
+
+**7B group 3D trajectory**：
+
+![7B group 3D trajectory (5 models)](refusal_direction_7B_cm_binary_n128_with_raw/viz_group/group_3d_trajectory.png)
+
+**看什么**：5 个 7B 模型的 refusal direction 跨层 3D PCA 轨迹。
+
+**关键观察**：
+- 5 条轨迹在 L0-L8 几乎完全重合。
+- L8-L15 开始分裂为 2 大组：Coder family (Coder, AZR-Coder) 跟 non-Coder family (base, Instruct, AZR-Base) 走不同 3D path。
+- **关键**：AZR-Base-7B（黄色轨迹）跟 plain base 几乎重合，**没有偏向 Coder family**。
+- L20-L27 各模型再次分散到不同 3D region。
+
+**解读**：**AZR-Base-7B 跟 plain base 走同一条 refusal direction trajectory**，确认 self-evolving direct 路径不改变 refusal direction 的演化。这是 F0 (representation silence) 在 7B 跨整个 trajectory 的视觉验证。
 
 ### 2.3 权重 diff（fp64 per-tensor 余弦）
 

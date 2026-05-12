@@ -332,6 +332,45 @@ Same 5 figures in `results/refusal_direction_7B_cm_binary_n128_with_raw/`.
 - Emergence-layer hierarchy holds at 7B: Coder family ~5–6 layers shallower than non-Coder family.
 - AZR-Base-7B inherits base's emergence depth (L14) but reaches the Coder-family acc level (0.97) — depth from base, quality from self-evolving training.
 
+**7B Emergence layer curves**:
+
+![7B probe emergence + prune zone](refusal_direction_7B_cm_binary_n128_with_raw/fig_emergence_curve.png)
+
+**What to see**: 5 curves + vertical dashed line per model marking emergence layer + horizontal 98% threshold + prune-zone shading.
+
+**Key observations**: emergence layers — AZR-Coder-7B L8, Coder-7B L9, AZR-Base-7B L15, plain Qwen2.5-7B L14, Instruct L12. The 5 models split into 2 clusters:
+- Coder family (Coder + AZR-Coder): emergence L8–9 (29–32% depth)
+- non-Coder family (base + Instruct + AZR-Base): emergence L12–15 (43–54% depth)
+
+**Interpretation**: emergence ~5 layers earlier is **a Coder pretraining signature**, not a self-evolving feature. AZR-Base-7B (no Coder path) emergence (L15) is essentially identical to plain base (L14), confirming self-evolving doesn't shift the depth. AZR-Coder-7B (via Coder) inherits Coder's shallow emergence (L8). **Coder pretraining is the decisive determinant of emergence depth.**
+
+**7B Probe accuracy heatmap**:
+
+![7B probe acc heatmap (5 models)](refusal_direction_7B_cm_binary_n128_with_raw/fig_probe_acc_heatmap.png)
+
+**What to see**: 5 panels (5 7B models). Each panel = 5 rows × 28 columns = 5 positions × 28 layers, color = probe accuracy. Darker = higher acc.
+
+**Key observations**:
+- All 5 models darkest at **pos -2 / -3 / -4 rows**, matching the norm heatmap — refusal direction is most informative at these token positions.
+- **Coder family (Coder, AZR-Coder)** heatmaps go dark green (acc 0.95+) starting at L8, reaching the plateau earlier.
+- **non-Coder family (base, AZR-Base, Instruct)** darkness onset at L12–15, later.
+- AZR-Base-7B's pattern sits between base and Coder but closer to base.
+
+**Interpretation**: visualization of the joint (pos × layer) distribution of emergence. **The deepest cell in each panel corresponds to the model's best (pos, layer)** — matches the (pos, layer) column in the §2.2 table.
+
+**7B Norm heatmap**:
+
+![7B refusal direction norm heatmap (5 models)](refusal_direction_7B_cm_binary_n128_with_raw/fig_norm_heatmap.png)
+
+**What to see**: 5 panels × (5 pos × 28 layer) heatmaps. Each cell = ‖refusal direction‖.
+
+**Key observations**:
+- pos -2 / -3 rows darkest (highest norm), consistent with 3B.
+- prune zone (L22+, last 20%) norm inflates.
+- **All 5 7B models share a nearly identical norm landscape** — this magnitude pattern is a Qwen2.5 architectural signature, unchanged by any training step.
+
+**Interpretation**: same as 3B norm_heatmap — refusal direction magnitude is architecture-specific and training-step-independent. This is why we can cross-model compare cosines fairly (norms align, so cosines are well-conditioned).
+
 #### Key figures (single-model + group viz)
 
 **Single-model viz example** (AZR-Coder-3B): 4 figures.
@@ -383,6 +422,57 @@ Same 5 figures in `results/refusal_direction_7B_cm_binary_n128_with_raw/`.
 **Key observation**: 4 trajectories nearly coincide at L0–L10 (co-directional motion), spread out into different 3D regions at L10–L25, re-converge at L25–L33, then spread again at L33–L35. **Coder ↔ AZR-Coder trajectories run close together** throughout (3D visualization of self-evolving silence); base ↔ Instruct also pair up.
 
 **Interpretation**: the evolution trajectory isn't synchronized across all 4 models, but same-family models (Coder family vs non-Coder family) follow nearby paths — consistent with the §2.1 displacement-arrow finding.
+
+#### Key figures (7B per-model + group viz)
+
+**AZR-Base-7B scatter (the key self_evolving_direct control)**:
+
+![AZR-Base-7B scatter at best (pos, layer)](refusal_direction_7B_cm_binary_n128_with_raw/viz_singlemodel/AZR-Base-7B_scatter.png)
+
+**What to see**: AZR-Base-7B's 128 harmful + 128 harmless raw residuals at best (pos=-2, L15), projected onto PC1×PC2. Green = harmless, red = harmful.
+
+**Key observation**: same pattern as 3B AZR-Coder scatter — **harmful/harmless almost fully overlap in PC1×PC2**, yet probe acc = 0.974. Refusal direction remains sub-percent variance signal.
+
+**Interpretation**: AZR-Base-7B (the no-Coder-path self-evolving) behaves like AZR-Coder-7B: refusal direction is not visible in PC1×PC2 but the probe still decodes it at high accuracy. **Self-evolving along either path preserves the sub-percent variance refusal signal**.
+
+**AZR-Coder-7B vs class centroids** (semantic composition of refusal):
+
+![AZR-Coder-7B refusal vs 6 class centroids](refusal_direction_7B_cm_binary_n128_with_raw/viz_singlemodel/AZR-Coder-7B_vs_class.png)
+
+**What to see**: x = layer (0–27), y = cos(refusal direction at pos=-2, class centroid). 6 curves for 6 IBM classes.
+
+**Key observations**:
+- **3 "clearly harmful" classes (hate_speech red, crime_planning purple, sexual_content yellow) peak positive in mid-layers** (cos ≈ 0.10–0.15).
+- **3 "harmless" classes (base gray, health blue, legal blue) are negative or near 0 in mid-layers**.
+- Early layers (L0–L5) all 6 curves bunch at 0.05–0.13 (weak undifferentiated projection).
+- Mid-layers (L8–L13): harmful and harmless **clearly separate** (harmful positive, harmless negative).
+- L15–L20 mix again, L25+ enters prune zone with extreme fluctuations.
+
+**Interpretation**: AZR-Coder-7B's refusal direction at mid-layers **clearly points toward the harmful classes** — not an abstract "refuse" concept but "the mean direction of harmful classes". Same pattern as 3B AZR-Coder. **7B replicates the semantic composition of the refusal direction**: refusal = the mean direction of harmful classes, consistent with cm_binary's dataset design.
+
+**7B group scatter (5 models in one canvas)**:
+
+![7B group scatter (5 models, best layer)](refusal_direction_7B_cm_binary_n128_with_raw/viz_group/group_scatter.png)
+
+**What to see**: 5 7B models × 2 classes = 10 colors, each model's 256 prompts projected onto a joint 5-model PCA.
+
+**Key observation**: 5 models form 5 lobes (matching the §2.1 L25 centroid figure), but within each lobe harmful/harmless don't visually separate. **AZR-Base-7B's lobe sits next to plain base** (same family); AZR-Coder-7B's lobe sits next to Coder-7B.
+
+**Interpretation**: re-confirms inter-model variance dominates over within-model harmful/harmless variance — refusal direction is sub-percent variance. **The 5-model PCA grouping reflects self-evolving silence** (each AZR sits next to its own base).
+
+**7B group 3D trajectory**:
+
+![7B group 3D trajectory (5 models)](refusal_direction_7B_cm_binary_n128_with_raw/viz_group/group_3d_trajectory.png)
+
+**What to see**: 5 7B models' refusal-direction 3D PCA trajectories across layers.
+
+**Key observations**:
+- 5 trajectories nearly coincide at L0–L8.
+- L8–L15 split into 2 groups: Coder family (Coder, AZR-Coder) and non-Coder family (base, Instruct, AZR-Base) take different 3D paths.
+- **Critically**: AZR-Base-7B (yellow trajectory) nearly overlaps plain base, **not pulled toward the Coder family**.
+- L20–L27 trajectories spread into different 3D regions.
+
+**Interpretation**: **AZR-Base-7B and plain base follow the same refusal-direction trajectory**, confirming that self-evolving direct does not alter the refusal direction's evolution. F0 (representation silence) visually verified across the full 7B trajectory.
 
 ### 2.3 Weight diff (fp64 per-tensor cosine)
 
