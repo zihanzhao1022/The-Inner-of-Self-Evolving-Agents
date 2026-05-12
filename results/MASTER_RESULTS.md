@@ -113,6 +113,30 @@ Five training axes (3B has 3, 7B has 5):
 
 **Reading**: self-evolving's relative geometry is preserved to ≤ 0.001 (3B) / ≤ 0.0001 (7B) under optimal rigid alignment. The matching displacement angle is 1°. **Scaling makes silence stronger, not weaker.**
 
+#### Key figures (3B)
+
+**6-panel PCA snapshot across layers**: shows class centroids (base / hate / health / sexual / legal / crime) for the 4 3B models. Early layers fully overlap; L33 onward the AZR-Coder centroid rotates but cluster shape is preserved.
+
+![3B centroids panels layers L0-L35](L35_rotation_20260506-0000/centroids_panels_layers.png)
+
+**Procrustes residual + alignment cosine vs layer**: 3 axes' rigid-alignment quality per layer. self_evolving stays under 0.005 throughout; domain is 6–10× higher in the middle and late layers.
+
+![3B Procrustes residual + cos before/after alignment](L35_rotation_20260506-0000/procrustes_residual.png)
+
+**Per-class L33→L35 displacement arrows**: visualizes where each class centroid moves from L33 to L35. base/Instruct arrows are short and tightly directed; AZR's arrows match Coder's almost exactly — same "flip" pattern.
+
+![3B L33→L35 displacement arrows](L35_rotation_20260506-0000/displacement_L33_to_L35.png)
+
+#### Key figures (7B)
+
+The same 6 figures live in `results/L35_rotation_20260510-0000/`. **Key finding**: 7B's self_evolving_direct (base→AZR-Base) and self_evolving_via_coder (Coder→AZR-Coder) behave almost identically (1.0° vs 1.4°), falsifying "Coder provides robustness".
+
+![7B centroids panels layers (L25 fork)](L35_rotation_20260510-0000/centroids_panels_layers.png)
+
+![7B Procrustes residual per axis](L35_rotation_20260510-0000/procrustes_residual.png)
+
+![7B L25→L27 displacement arrows](L35_rotation_20260510-0000/displacement_L25_to_L27.png)
+
 ### 2.2 Refusal direction (Arditi-aligned DiM)
 
 **Canonical**: `results/refusal_direction_{3B,7B}_{cm_binary,arditi}_n128_with_raw/`
@@ -147,11 +171,53 @@ Each contains `candidate_directions.npz` (shape `(n_pos=5, n_layer, d_model)` pe
 
 `arditi_combined` dataset gives probe acc = 1.000 with emergence L0 across all models — a **dataset-mismatch artifact** (HarmBench/AdvBench is trivially separable from Alpaca at raw embedding level). Cosine and angle metrics on arditi remain trustworthy; emergence numbers are not.
 
+#### Key figures (3B cm_binary)
+
+**Cross-model refusal-direction cosine vs layer**: 6 curves for the 6 3B model pairs. self_evolving (Coder vs AZR-Coder) is near 1.0 at every layer; other pairs vary substantially.
+
+![3B refusal-direction cosine vs layer, per axis pair](refusal_direction_3B_cm_binary_n128_with_raw/fig_cosine_pairs.png)
+
+**Probe accuracy vs layer**: each model's own refusal-direction probe accuracy. Coder family (Coder, AZR-Coder) hits the peak around L8–L9; non-Coder family takes until L10–L12.
+
+![3B probe acc curves per model](refusal_direction_3B_cm_binary_n128_with_raw/fig_probe_acc_curves.png)
+
+**Emergence layer curves + prune zone**: when each model's probe acc reaches 98% of peak. AZR-Coder-3B at L8 (earliest); Qwen2.5-Coder-3B at L27 (latest — fp64 fluctuation in prune zone).
+
+![3B probe emergence + prune zone](refusal_direction_3B_cm_binary_n128_with_raw/fig_emergence_curve.png)
+
+**Norm heatmap (5 × 36)**: L2 norm of the direction vector at each (pos, layer). Position −2 / −3 are highest; the last 5 layers (prune zone) blow up — untrustworthy region.
+
+![3B refusal direction norm heatmap](refusal_direction_3B_cm_binary_n128_with_raw/fig_norm_heatmap.png)
+
+#### Key figures (7B cm_binary)
+
+Same 5 figures in `results/refusal_direction_7B_cm_binary_n128_with_raw/`.
+
+![7B refusal-direction cosine vs layer](refusal_direction_7B_cm_binary_n128_with_raw/fig_cosine_pairs.png)
+
+![7B probe acc curves](refusal_direction_7B_cm_binary_n128_with_raw/fig_probe_acc_curves.png)
+
+#### Key figures (single-model + group viz)
+
+**Single-model viz example** (AZR-Coder-3B): 4 figures — harmful vs harmless scatter at best (pos, layer), (n_pos × L)² self-cosine matrix, cosine with 6 class centroids, and 3D PCA trajectory.
+
+![AZR-Coder-3B scatter at best (pos, layer)](refusal_direction_3B_cm_binary_n128_with_raw/viz_singlemodel/AZR-Coder-3B_scatter.png)
+
+![AZR-Coder-3B refusal direction self-cosine matrix](refusal_direction_3B_cm_binary_n128_with_raw/viz_singlemodel/AZR-Coder-3B_self_cosine.png)
+
+![AZR-Coder-3B vs 6 class centroids cosine](refusal_direction_3B_cm_binary_n128_with_raw/viz_singlemodel/AZR-Coder-3B_vs_class.png)
+
+**Group viz (3B family)**: all 4 models on the same canvas.
+
+![3B group scatter (4 models, best layer)](refusal_direction_3B_cm_binary_n128_with_raw/viz_group/group_scatter.png)
+
+![3B group 3D trajectory](refusal_direction_3B_cm_binary_n128_with_raw/viz_group/group_3d_trajectory.png)
+
 ### 2.3 Weight diff (fp64 per-tensor cosine)
 
 **Canonical paths**:
 - 3B: `results/weight_diff_20260509-1831/` (full quartet, `axis_pairs = {RLHF, domain, self_evolving}`)
-- **7B (completed 2026-05-12)**: `results/weight_diff_7B_subprocess/` (4/5 pairs successful, subprocess-per-pair workaround bypasses in-process OOM)
+- **7B (completed 2026-05-12)**: `results/weight_diff_7B_subprocess/` (**5/5 pairs successful**, subprocess-per-pair + `--no-gpu` fallback for cross_AZR)
 
 #### 3B weight diff (fp64 per-tensor cosine)
 
@@ -206,8 +272,13 @@ Cross-scale consistency: self-evolving is **completely silent at the weight leve
 
 #### Per-layer cosine heatmaps
 
-- 3B: `results/weight_diff_20260509-1831/weight_cosines_heatmap.png`
-- **7B**: `results/weight_diff_7B_subprocess/weight_cosines_heatmap.png` (**4-panel: RLHF all green / domain orange-yellow / self_evolving_direct all green / self_evolving_via_coder all green**; visually shows self-evolving doesn't touch any layer × component weight)
+**3B full quartet**: 3-panel heatmap, layer × component. Green = cos ≈ 1. RLHF / self_evolving uniformly green; domain shows moderate change on q/k/v/o/gate/up/down.
+
+![3B weight cosine heatmap (3 axes)](weight_diff_20260509-1831/weight_cosines_heatmap.png)
+
+**7B full 5-axis quintet**: 5-panel heatmap. **RLHF / self_evolving_direct / self_evolving_via_coder all uniformly green** (cos ≈ 1.0); domain and cross_AZR show **nearly identical** orange/yellow+green stripes (cross_AZR transitivity = domain).
+
+![7B weight cosine heatmap (5 axes)](weight_diff_7B_subprocess/weight_cosines_heatmap.png)
 
 #### Subprocess workaround design (NEW 2026-05-12)
 
@@ -250,7 +321,17 @@ Each contains 6 figures:
 
 **Result**: base's `hate − base` direction × Procrustes R, injected into AZR's L35, produces an activation shift identical to AZR's native hate vector to 3 decimal places at strengths ±1, ±2. **Causal confirmation that the refusal-related directions are unitarily mapped by the rotation that Procrustes recovers.**
 
-Plot: `steering_transfer_curves.png` shows the "Procrustes-rotated ≈ AZR-native" overlap with raw (unrotated) base directions falling well below.
+#### Key figures
+
+**Steering transfer curves**: x-axis = injection strength (±1, ±2), y-axis = next-token logit shift. 3 curves: (1) Procrustes-rotated base direction → AZR activations; (2) AZR's own native direction; (3) unrotated raw base direction. (1) and (2) overlap almost perfectly — the rotation recovers exactly; (3) diverges substantially.
+
+![Steering transfer curves: Procrustes-rotated vs native vs raw](steering_transfer_20260506-1628/steering_transfer_curves.png)
+
+**Procrustes recovery ratio**: per-layer, how well the Procrustes-rotated base direction matches AZR's native direction (cosine). L25 / L33 / L35 all near 1.0 — confirming the R recovered by Procrustes is unitary.
+
+![Procrustes recovery ratio](steering_transfer_20260506-1628/procrustes_recovery_ratio.png)
+
+![Steering transfer summary](steering_transfer_20260506-1628/steering_transfer_summary.png)
 
 ---
 
@@ -294,6 +375,20 @@ Plot: `steering_transfer_curves.png` shows the "Procrustes-rotated ≈ AZR-nativ
 Coder = AZR exactly on Religion (both 0.200). The BBQ-Religion outlier is **almost certainly a likelihood-of-phrase artifact**: the "Cannot be determined" / "Not enough info" choice has high pretraining-corpus likelihood in religious contexts, and Coder's continued pretraining on a code corpus shifts that prior. **The drift originates from Coder, not from self-evolving.** Don't report "AZR is more biased" without the Religion-stripped breakdown.
 
 > **File note**: `value_benchmarks_coder_n200/results.json` contains the full Coder-3B numbers, but `value_benchmarks_coder_n200/summary_table.md` is empty ("no models in results") because `summarize_value_benchmarks.py` expected trio format. Use `results.json` directly.
+
+#### Key figures
+
+**3-benchmark summary (4 models)**: TruthfulQA / BBQ ambig / AdvBench logP, 4 bars per panel. TQA — Instruct rises slightly, Coder/AZR flat; BBQ — Coder/AZR drop together; AdvBench — Instruct most-aligned, Coder/AZR slightly below base.
+
+![Value benchmark summary (4 models)](value_benchmarks_20260506-1713/value_benchmarks_summary.png)
+
+**BBQ category breakdown**: 5 BBQ categories × 4 models. The Religion column clearly separates Coder/AZR from base/Instruct — strong evidence that the BBQ-Religion drift comes from Coder pretraining, not self-evolving.
+
+![BBQ by category (4 models)](value_benchmarks_20260506-1713/bbq_by_category.png)
+
+**AdvBench logP distribution**: per-model mean logP(compliant continuation) over 200 harmful prompts. Coder-3B has a full histogram; the other 3 models lost their per-item data (mid-run dir delete, 2026-05-06), so only the mean vline is shown. Instruct most-negative (most-aligned), base least-negative (most willing to comply), Coder/AZR in between.
+
+![AdvBench compliance logprob distribution](value_benchmarks_20260506-1713/advbench_distribution.png)
 
 ### 3.2 Generations (refusal rate per model, n_total=50–150)
 
@@ -447,6 +542,20 @@ For each (prompt, model), project the raw residual at best (pos, layer) onto the
 
 **v1 conclusion** (provisional): AUC 0.59–0.77 looks like the refusal direction predicts behaviour. **But this is a base-rate artefact.**
 
+#### Key figures
+
+**Scatter (projection × behaviour)**: 4 panels, one per model. x = projection on refusal direction, y = behaviour (refuse / degen / comply, jittered). Harmful (red) and harmless (blue) are separated across the x-axis, but within either class refuse vs comply are not — visual hint of Finding 1.
+
+![3B paired analysis v1: scatter (projection × refusal)](paired_analysis_20260511-1510/fig_scatter_3B.png)
+
+**Boxplot (class × behaviour)**: 4 buckets per model (harm/refuse, harm/comply, harmless/refuse, harmless/comply). **Key observation**: harmful vs harmless separates cleanly, but harm/refuse and harm/comply boxes overlap on all 4 models — directly visible evidence that the refusal direction is a prompt-type detector, not a behaviour predictor.
+
+![3B paired v1: projection by class × behaviour](paired_analysis_20260511-1510/fig_box_3B.png)
+
+**Histogram by behaviour**: same projection, colored by refuse vs comply. If the refusal direction predicted behaviour, the two histograms would separate — they don't.
+
+![3B paired v1: projection distribution by behaviour](paired_analysis_20260511-1510/fig_hist_3B.png)
+
 ### 4.2 Paired v2 — within-class + null + soft regex
 
 **Canonical**: `results/paired_analysis_v2_20260511-1530/`
@@ -462,6 +571,20 @@ For each (prompt, model), project the raw residual at best (pos, layer) onto the
 - Restricting to harmful prompts only, AUC drops to **null floor** on every model (max z = 2.0, marginal).
 - Instruct: AUC_within = 0.499 (literally chance) + cos(Arditi, behaviour-dir) = -0.003 (perfectly orthogonal).
 - AUC_beh insample (0.72–0.94) confirms a behaviour-predicting direction **does** exist — it's just **not** the Arditi DiM.
+
+#### Key figures
+
+**Within-harmful boxplot**: 4 panels, one per model. Projection of harmful prompts only, split by refuse vs comply. Boxes overlap almost entirely — within the harmful class, the refusal direction has no within-class predictive power.
+
+![3B v2: within-harmful projection by refuse/comply](paired_analysis_v2_20260511-1530/fig_within_class_3B.png)
+
+**Null distribution histogram**: 20 random unit directions as null baseline (gray); red vertical = the real Arditi DiM AUC. On 3 of 4 models the red line falls inside the null histogram (z ≈ 0–2), demonstrating the Arditi direction has **no within-class predictive lift over random**.
+
+![3B v2: null AUC distribution + Arditi line](paired_analysis_v2_20260511-1530/fig_null_dist_3B.png)
+
+**cos(Arditi DiM, behaviour direction) bar**: 3 donors with enough refused data. Qwen2.5-3B 0.12, Instruct -0.003, Coder 0.32 — clustered around 0, indicating the prompt-type direction and the behaviour direction are orthogonal or nearly so.
+
+![3B v2: cos(Arditi, behaviour-direction)](paired_analysis_v2_20260511-1530/fig_behaviour_dir_3B.png)
 
 ### 4.3 Cross-model behaviour direction transfer (Findings 3 + 4)
 
@@ -485,6 +608,20 @@ For each donor M with ≥ 3 refused and ≥ 3 complied harmful: `v_M = mean(raw 
 **Recipient distribution shift** (Finding 4):
 On Coder-3B's behaviour direction, AZR-Coder-3B's 18 harmful clean activations project to **-15 to -5** (mean ≈ -9), versus Coder's own comply mean ≈ 0 and refuse mean ≈ +18. AZR's activations sit **far past Coder's "definitely comply" region** in the opposite direction from refusal — same axis identity (weight cos 0.999999), used to push toward stronger comply.
 
+#### Key figures
+
+**Cross-cosine matrix (3 donors)**: 3×3 matrix, diagonal 1.0, all off-diagonals **near zero** (0.05 / 0.03 / -0.06). Visually shows behaviour direction is model-private.
+
+![3B behaviour-direction cross-cosine matrix](behaviour_transfer_20260511-1535/fig_cos_matrix_3B.png)
+
+**Transfer AUC matrix (donor → recipient)**: 3 donors × 4 recipients. Diagonal (in-sample) 0.72–1.00; off-diagonal 0.32–0.60 (near random) — direction does not transfer across models.
+
+![3B transfer AUC heatmap](behaviour_transfer_20260511-1535/fig_transfer_auc_3B.png)
+
+**AZR-Coder-3B on each donor's behaviour direction** (visual proof of Finding 4): 3 panels, one per donor. Coder-3B panel (rightmost) shows AZR's comply cluster (cyan step) at **-15 to -5**, far below Coder's own comply mean (green fill) and opposite to refuse mean (red fill) — AZR is pushed off Coder's behaviour axis.
+
+![3B AZR-Coder projected on each donor's behaviour direction](behaviour_transfer_20260511-1535/fig_recipient_AZR-Coder-3B_3B.png)
+
 ### 4.4 Bootstrap CI on cross-cosines
 
 **Canonical**: `results/bootstrap_cos_20260511-1548/`
@@ -503,6 +640,12 @@ On Coder-3B's behaviour direction, AZR-Coder-3B's 18 harmful clean activations p
 - Coder: **+0.276 [+0.077, +0.419]** ← significantly > 0, confirms bootstrap CAN find non-zero cosines
 
 **Finding 3 statistically validated**: all 3 cross-pairs have 95% CI fully within ±0.2.
+
+#### Key figure
+
+**Violin plot**: 3 cross-pair bootstrap distributions (blue) + 3 same-model Arditi positive controls (gray). All three blue violins hug zero; **95% CI entirely within ±0.2**. The Coder Arditi control (rightmost gray) is significantly > 0 (median +0.28) — proves bootstrap **can** find non-zero cosines when they exist, so cross-pair ≈ 0 isn't a bootstrap deficiency.
+
+![3B bootstrap cosine distributions (cross-pair vs Arditi control)](bootstrap_cos_20260511-1548/fig_violin_3B.png)
 
 ### 4.5 Refusal regex ablation
 
@@ -615,6 +758,32 @@ In 3B, cross-pair P(|cos|<0.2) = 100%. In 7B, P(|cos|<0.2) = **0.2%**. Bootstrap
 | F5 (echo loops doubled) | ❌ **DOES NOT REPLICATE** (7B Coder→AZR loops 3→2, slightly reduced) |
 
 **Only F0 (representation-level silence) is robust at 7B. F1–F5 are all scale-dependent.**
+
+#### Key figures (7B)
+
+**7B within-harmful boxplot** (v2 replication): same structure as 3B. AZR-Coder-7B's within-harmful AUC = 0.192 (inverted — low projection ↔ refuse); Coder-7B = 0.457 (near chance).
+
+![7B v2 within-harmful boxplot](paired_analysis_v2_20260512-0920/fig_within_class_7B.png)
+
+**7B null distribution**: AZR-Coder-7B's red line falls outside the null right tail but **inverted** (AUC 0.192 well below 0.5); Coder-7B's red line is near the null center.
+
+![7B v2 null distribution + Arditi line](paired_analysis_v2_20260512-0920/fig_null_dist_7B.png)
+
+**7B behaviour-transfer cos matrix** (only 2 donors, Coder + AZR-Coder): 2×2 matrix, **off-diagonal cos = +0.502**, far from 0. Sharp contrast to 3B's ≈ 0 — F3 does not replicate.
+
+![7B behaviour-direction cross-cosine matrix (Coder × AZR-Coder)](behaviour_transfer_20260512-0921/fig_cos_matrix_7B.png)
+
+**7B AZR-Base-7B recipient distribution**: AZR-Base-7B (cannot be a donor — n_refused=0) projected on Coder-7B's behaviour direction. Sits inside Coder's comply region — no off-axis displacement like 3B AZR.
+
+![7B AZR-Base-7B projected on Coder-7B's behaviour direction](behaviour_transfer_20260512-0921/fig_recipient_AZR-Base-7B_7B.png)
+
+**7B Qwen2.5-7B recipient distribution**: plain Qwen2.5-7B (0 refused, base model) projected on Coder-7B's behaviour direction. Also in comply region, no displacement.
+
+![7B Qwen2.5-7B projected on Coder-7B's behaviour direction](behaviour_transfer_20260512-0921/fig_recipient_Qwen2.5-7B_7B.png)
+
+**7B Bootstrap violin**: 1 cross-pair (Coder × AZR-Coder) + 2 same-model Arditi controls. The blue violin's median = +0.502, **95% CI entirely between +0.3 and +0.7**, completely different from 3B's ±0.2.
+
+![7B bootstrap cosine distributions](bootstrap_cos_20260512-0921/fig_violin_7B.png)
 
 #### Interpretation: why is 3B so different from 7B?
 

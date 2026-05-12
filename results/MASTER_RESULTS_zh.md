@@ -112,6 +112,30 @@
 
 **解读**：自演化的相对几何在最优刚性对齐下保留到 ≤ 0.001（3B）/ ≤ 0.0001（7B）。对应的位移角度是 1°。**Scale 越大、沉默越严**。
 
+#### 关键图（3B）
+
+**6-panel PCA 快照**：跨层展示 4 个 3B 模型每类的 centroids（base / hate / health / sexual / legal / crime）。早期层完全重合；L33 之后出现 AZR-Coder 的旋转分叉，但簇形状保留。
+
+![3B centroids panels layers L0-L35](L35_rotation_20260506-0000/centroids_panels_layers.png)
+
+**Procrustes 残差随层 + 位移角度随层**：3 条轴在每层的相对几何对齐质量。self_evolving (Coder→AZR-Coder) 全层都低于 0.005；domain 在中后层高出 6-10×。
+
+![3B Procrustes residual + cos before/after alignment](L35_rotation_20260506-0000/procrustes_residual.png)
+
+**每类 L33→L35 位移箭头**：可视化每类 centroid 从 L33 到 L35 怎么走。base/Instruct 的箭头小、方向集中；AZR 的箭头跟 Coder 几乎重合 — 同一种"翻转"模式。
+
+![3B L33→L35 displacement arrows](L35_rotation_20260506-0000/displacement_L33_to_L35.png)
+
+#### 关键图（7B）
+
+**7B 同样 6-panel + 6 张图都在** `results/L35_rotation_20260510-0000/`。**核心 finding**：7B 上 self_evolving_direct (base→AZR-Base) 跟 self_evolving_via_coder (Coder→AZR-Coder) 行为几乎相同（1.0° vs 1.4°），证伪 "Coder 提供鲁棒性"。
+
+![7B centroids panels layers (L25 fork)](L35_rotation_20260510-0000/centroids_panels_layers.png)
+
+![7B Procrustes residual per axis](L35_rotation_20260510-0000/procrustes_residual.png)
+
+![7B L25→L27 displacement arrows](L35_rotation_20260510-0000/displacement_L25_to_L27.png)
+
 ### 2.2 拒绝方向（Arditi-aligned DiM）
 
 **权威路径**：`results/refusal_direction_{3B,7B}_{cm_binary,arditi}_n128_with_raw/`
@@ -150,11 +174,53 @@
 
 **注意**：`arditi_combined` 数据集所有模型的 probe acc 都是 1.000 且 emergence layer L0 — 这是**数据集 mismatch 假象**（HarmBench/AdvBench vs Alpaca 在原始 embedding 层就线性可分）。cm_binary（同 scaffolding）才是合适的 emergence 测量；arditi 上的 cosine 和 angle 仍然可信。
 
+#### 关键图（3B cm_binary）
+
+**跨模型拒绝方向余弦随层**：6 条曲线对应 6 个 3B 模型对，self_evolving (Coder vs AZR) 在所有层都接近 1.0，其他对在不同层有较大变化。
+
+![3B refusal-direction cosine vs layer, per axis pair](refusal_direction_3B_cm_binary_n128_with_raw/fig_cosine_pairs.png)
+
+**Probe accuracy 随层**：每个模型自己的拒绝方向 probe，随层的分类精度。Coder 家族（Coder, AZR-Coder）在 L8-L9 就达到峰值；非 Coder 家族在 L10-L12 才到。
+
+![3B probe acc curves per model](refusal_direction_3B_cm_binary_n128_with_raw/fig_probe_acc_curves.png)
+
+**Emergence layer 曲线 + prune zone**：每模型 probe acc 何时达到 98% 峰值。AZR-Coder-3B 在 L8（最早），Qwen2.5-Coder-3B 在 L27（最晚 — 因为 fp64 fluctuation 在 prune zone 处理）。
+
+![3B probe emergence + prune zone](refusal_direction_3B_cm_binary_n128_with_raw/fig_emergence_curve.png)
+
+**Norm heatmap（5 × 36）**：每个 (pos, layer) 处方向向量的 L2 范数。pos -2 / -3 处范数最大，最后 5 层（prune zone）暴涨 — 是不可信区域。
+
+![3B refusal direction norm heatmap](refusal_direction_3B_cm_binary_n128_with_raw/fig_norm_heatmap.png)
+
+#### 关键图（7B cm_binary）
+
+7B 同样的 5 张图都在 `results/refusal_direction_7B_cm_binary_n128_with_raw/`。
+
+![7B refusal-direction cosine vs layer](refusal_direction_7B_cm_binary_n128_with_raw/fig_cosine_pairs.png)
+
+![7B probe acc curves](refusal_direction_7B_cm_binary_n128_with_raw/fig_probe_acc_curves.png)
+
+#### 关键图（per-model 单模型可视化 + group 可视化）
+
+**Single-model viz 例子**（AZR-Coder-3B）：4 类可视化 — best (pos, layer) 处 harmful vs harmless 散点 + (n_pos × L)² self-cosine 矩阵 + 跨类 centroid 余弦 + 3D PCA 轨迹。
+
+![AZR-Coder-3B scatter at best (pos, layer)](refusal_direction_3B_cm_binary_n128_with_raw/viz_singlemodel/AZR-Coder-3B_scatter.png)
+
+![AZR-Coder-3B refusal direction self-cosine matrix](refusal_direction_3B_cm_binary_n128_with_raw/viz_singlemodel/AZR-Coder-3B_self_cosine.png)
+
+![AZR-Coder-3B vs 6 class centroids cosine](refusal_direction_3B_cm_binary_n128_with_raw/viz_singlemodel/AZR-Coder-3B_vs_class.png)
+
+**Group viz（3B）**：4 个模型一起看，3B family group 视角。
+
+![3B group scatter (4 models, best layer)](refusal_direction_3B_cm_binary_n128_with_raw/viz_group/group_scatter.png)
+
+![3B group 3D trajectory](refusal_direction_3B_cm_binary_n128_with_raw/viz_group/group_3d_trajectory.png)
+
 ### 2.3 权重 diff（fp64 per-tensor 余弦）
 
 **权威路径**：
 - 3B：`results/weight_diff_20260509-1831/`（完整四模型，`axis_pairs = {RLHF, domain, self_evolving}`）
-- **7B（2026-05-12 完成）**：`results/weight_diff_7B_subprocess/`（4/5 axis pair 完成，subprocess-per-pair workaround 绕过 in-process OOM）
+- **7B（2026-05-12 完成）**：`results/weight_diff_7B_subprocess/`（**5/5 axis pair 全部完成**，subprocess-per-pair + `--no-gpu` fallback for cross_AZR）
 
 #### 3B 权重 diff（fp64 per-tensor 余弦）
 
@@ -209,8 +275,13 @@ AZR-Coder  ≈  Qwen2.5-Coder-7B    (cos ≈ 1)
 
 #### 每层余弦热图
 
-- 3B：`results/weight_diff_20260509-1831/weight_cosines_heatmap.png`
-- **7B**：`results/weight_diff_7B_subprocess/weight_cosines_heatmap.png`（**4-panel：RLHF 全绿 / domain 橙黄 / self_evolving_direct 全绿 / self_evolving_via_coder 全绿**；视觉上一眼看出 self-evolving 不改任何 layer × component 权重）
+**3B 完整四模型**：3-panel heatmap，layer × component。绿色 = cos ≈ 1。RLHF / self_evolving 全绿；domain 在 q/k/v/o/gate/up/down 上中度变化。
+
+![3B weight cosine heatmap (3 axes)](weight_diff_20260509-1831/weight_cosines_heatmap.png)
+
+**7B 完整 5 axis pair**：5-panel heatmap。**RLHF / self_evolving_direct / self_evolving_via_coder 三块全绿**（cos ≈ 1.0）；domain 跟 cross_AZR **几乎完全一致**的橙黄+绿条纹（cross_AZR 传递 = domain）。
+
+![7B weight cosine heatmap (5 axes)](weight_diff_7B_subprocess/weight_cosines_heatmap.png)
 
 #### Subprocess workaround 设计（2026-05-12 新增）
 
@@ -253,7 +324,17 @@ AZR-Coder  ≈  Qwen2.5-Coder-7B    (cos ≈ 1)
 
 **结果**：base 的 `hate − base` 方向 × Procrustes R，注入到 AZR 的 L35，产生的激活偏移与 AZR 自己的 native hate 向量在强度 ±1、±2 下到小数点后 3 位相同。**因果上证明 refusal 相关方向被 Procrustes 恢复出的旋转作酉变换映射**。
 
-图：`steering_transfer_curves.png` 展示 "Procrustes 旋转后 ≈ AZR 原生"与 "未旋转的原始 base 方向"的差距曲线。
+#### 关键图
+
+**Steering 转移曲线**：x 轴 = 注入强度 (±1, ±2)，y 轴 = next-token logit shift。3 条曲线：(1) Procrustes 旋转后的 base 方向 → AZR 激活；(2) AZR 自己的 native 方向；(3) 未旋转的原始 base 方向。曲线 (1) 跟 (2) 几乎重合 — 旋转完美恢复；(3) 跟 (2) 偏差大。
+
+![Steering transfer curves: Procrustes-rotated vs native vs raw](steering_transfer_20260506-1628/steering_transfer_curves.png)
+
+**Procrustes 恢复率**：每层 Procrustes 旋转把 base 方向"翻译"到 AZR 方向的恢复程度（cos 同 native AZR 方向）。L25 / L33 / L35 都接近 1.0，证明 Procrustes 找到的 R 是 unitary 的。
+
+![Procrustes recovery ratio](steering_transfer_20260506-1628/procrustes_recovery_ratio.png)
+
+![Steering transfer summary](steering_transfer_20260506-1628/steering_transfer_summary.png)
 
 ---
 
@@ -297,6 +378,20 @@ AZR-Coder  ≈  Qwen2.5-Coder-7B    (cos ≈ 1)
 Coder = AZR 在 Religion 上完全相同（都是 0.200）。BBQ-Religion 异常**几乎可以确定是 phrase-likelihood 假象**："Cannot be determined" / "Not enough info" 选项在宗教相关上下文中的预训练语料似然偏高；Coder 在 code corpus 上的继续预训练平移了这个先验。**漂移源自 Coder 阶段，不是自演化阶段。** 不要在没剔除 Religion 的情况下报告 "AZR 更有偏见"。
 
 > **文件注记**：`value_benchmarks_coder_n200/results.json` 包含完整 Coder-3B 数据，但 `value_benchmarks_coder_n200/summary_table.md` 是空的（"no models in results"），因为 `summarize_value_benchmarks.py` 预期 trio 格式。请直接用 `results.json`。
+
+#### 关键图
+
+**3 个 benchmark 总览（4 模型）**：TruthfulQA / BBQ ambig / AdvBench logP，每个 panel 4 个 bar。TQA 上 Instruct 略升、Coder/AZR 持平；BBQ 上 Coder/AZR 一起跌；AdvBench Instruct 最对齐、Coder/AZR 略低于 base。
+
+![Value benchmark summary (4 models)](value_benchmarks_20260506-1713/value_benchmarks_summary.png)
+
+**BBQ 分类对照**：5 个 BBQ category × 4 个模型。Religion 列 Coder/AZR 跟 base/Instruct 完全分开 — 强烈表明 BBQ-Religion 漂移源自 Coder pretraining 而非 self-evolving。
+
+![BBQ by category (4 models)](value_benchmarks_20260506-1713/bbq_by_category.png)
+
+**AdvBench logP 分布**：每模型 200 个 harmful prompts 上的 mean logP(compliant continuation)。Coder-3B 有完整 histogram，其他 3 个模型 per-item 数据丢失（中途目录删除事故，2026-05-06），只显示均值竖线。Instruct 最负（最对齐），base 最正（最容易 comply），Coder/AZR 中间。
+
+![AdvBench compliance logprob distribution](value_benchmarks_20260506-1713/advbench_distribution.png)
 
 ### 3.2 生成（每模型拒绝率，n_total = 50–150）
 
@@ -450,6 +545,20 @@ AZR 的 generation 异常**不能用单一原因解释**，而是 4 种独立模
 
 **v1 暂定结论**：AUC 0.59–0.77 看起来 refusal 方向能预测行为。**但这是 base-rate 假象**（看 v2）。
 
+#### 关键图
+
+**Scatter（projection × behavior）**：4 panel，每模型 x = projection 投影，y = behaviour（refuse / degen / comply jittered）。harmful (红) vs harmless (蓝) 跨 class 分开，但 within class 看不出 refuse vs comply 的明显分界 — Finding 1 的视觉伏笔。
+
+![3B paired analysis v1: scatter (projection × refusal)](paired_analysis_20260511-1510/fig_scatter_3B.png)
+
+**Boxplot（class × behaviour）**：把每模型 prompt 分成 4 个箱子（harm/refuse, harm/comply, harmless/refuse, harmless/comply），看 projection 分布。**关键观察**：harmful vs harmless 显著分开；harm/refuse vs harm/comply 在所有 4 个模型上都重叠 — 直接看到 refusal direction 是 prompt-type detector 不是 behaviour predictor。
+
+![3B paired v1: projection by class × behaviour](paired_analysis_20260511-1510/fig_box_3B.png)
+
+**Histogram by behaviour**：把所有 prompts 投影后按 refuse / comply 涂色。如果 refusal direction 真能预测行为，两个 distribution 应明显分开 — 但图上明显重叠。
+
+![3B paired v1: projection distribution by behaviour](paired_analysis_20260511-1510/fig_hist_3B.png)
+
 ### 4.2 Paired v2 — within-class + null + 软拒绝 regex
 
 **权威路径**：`results/paired_analysis_v2_20260511-1530/`
@@ -465,6 +574,20 @@ AZR 的 generation 异常**不能用单一原因解释**，而是 4 种独立模
 - 限制到 harmful prompts only 后，AUC 在每个模型上都掉到 **null floor**（最大 z = 2.0，边缘显著）。
 - Instruct：AUC_within = 0.499（字面意义的随机）+ cos(Arditi, behaviour-dir) = -0.003（**完美正交**）。
 - AUC_beh insample（0.72–0.94）证明 behaviour 预测方向**确实存在** — 但**不是** Arditi DiM。
+
+#### 关键图
+
+**Within-harmful boxplot**：4 个模型，每个 panel 是 harmful prompts only 的 projection，分 refuse vs comply。boxes 几乎完全重叠 — 在 harmful 类内部，refusal direction 没有 within-class 预测力。
+
+![3B v2: within-harmful projection by refuse/comply](paired_analysis_v2_20260511-1530/fig_within_class_3B.png)
+
+**Null distribution histogram**：20 个 random direction 作为 null baseline，红线 = real Arditi DiM 的 AUC。3 个模型上 Arditi AUC 跟 null 分布几乎完全重合（z ≈ 0–2），证明 Arditi 方向**没有 within-class 预测力**超过 random。
+
+![3B v2: null AUC distribution + Arditi line](paired_analysis_v2_20260511-1530/fig_null_dist_3B.png)
+
+**cos(Arditi DiM, behaviour direction) bar**：3 个有足够 refused 数据的 donor 模型。Qwen2.5-3B 0.12, Instruct -0.003, Coder 0.32 — 大致围绕 0，说明 prompt-type 方向和 behaviour 方向**正交或近正交**。
+
+![3B v2: cos(Arditi, behaviour-direction)](paired_analysis_v2_20260511-1530/fig_behaviour_dir_3B.png)
 
 ### 4.3 跨模型 behaviour 方向转移（Findings 3 + 4）
 
@@ -488,6 +611,20 @@ AZR 的 generation 异常**不能用单一原因解释**，而是 4 种独立模
 **Recipient 分布偏移**（Finding 4）：
 把 AZR-Coder-3B 的 18 个 harmful clean 激活投影到 Coder-3B 的 behaviour 方向：**-15 到 -5**（均值 ≈ -9），而 Coder 自己的 comply 均值 ≈ 0、refuse 均值 ≈ +18。AZR 的激活**远超 Coder 的"绝对 comply"区域**，朝着拒绝的反方向。**同一方向身份**（权重 cos 0.999999），但被用来表达"比 Coder 更强的 comply 信号"。
 
+#### 关键图
+
+**Cross-cosine 矩阵（3 个 donor）**：3×3 矩阵，对角线 1.0，所有 off-diagonal **接近 0**（0.05 / 0.03 / -0.06）。视觉上一眼看到 behaviour direction 是 model-private。
+
+![3B behaviour-direction cross-cosine matrix](behaviour_transfer_20260511-1535/fig_cos_matrix_3B.png)
+
+**Transfer AUC 矩阵（donor → recipient）**：3 donor × 4 recipient。对角线（in-sample）0.72–1.00；off-diagonal 0.32–0.60（接近 random）— direction 不能跨模型转移。
+
+![3B transfer AUC heatmap](behaviour_transfer_20260511-1535/fig_transfer_auc_3B.png)
+
+**AZR-Coder-3B 在每个 donor 的 behaviour 方向上的分布**（Finding 4 视觉证明）：3 panel，每 panel 对应一个 donor 的 v。Coder-3B panel（最右）：AZR's comply cluster (cyan step) 在 **-15 到 -5**，远低于 Coder's comply mean (绿色填充)，跟 refuse mean (红色填充) 完全相反 — AZR 被推离 Coder 的 behaviour 轴。
+
+![3B AZR-Coder projected on each donor's behaviour direction](behaviour_transfer_20260511-1535/fig_recipient_AZR-Coder-3B_3B.png)
+
 ### 4.4 跨余弦的 Bootstrap CI
 
 **权威路径**：`results/bootstrap_cos_20260511-1548/`
@@ -506,6 +643,12 @@ AZR 的 generation 异常**不能用单一原因解释**，而是 4 种独立模
 - Coder：**+0.276 [+0.077, +0.419]** ← 显著 > 0，确认 bootstrap **能**发现非零余弦
 
 **Finding 3 统计上验证**：所有 3 个跨对的 95% CI 完全落在 ±0.2 内。
+
+#### 关键图
+
+**Violin plot**：3 个 cross-pair 的 bootstrap 分布（蓝色），3 个 same-model Arditi 正向对照（灰色）。3 个蓝色 violin 都紧靠 0，**95% CI 完全在 ±0.2 之内**。灰色 violin 中 Coder 的 cos(Arditi, behaviour) 显著 > 0 (median +0.28) — 证明 bootstrap **能**找到非零余弦，所以 cross-pair 接近 0 不是 bootstrap 缺陷。
+
+![3B bootstrap cosine distributions (cross-pair vs Arditi control)](bootstrap_cos_20260511-1548/fig_violin_3B.png)
 
 ### 4.5 拒绝 regex 消融
 
@@ -618,6 +761,32 @@ cos(AZR-Coder-7B × Qwen2.5-Coder-7B): median=+0.502, 95% CI=[+0.298, +0.627]
 | F5（echo loops 翻倍） | ❌ **不复制**（7B 上 Coder→AZR loops 3→2 略减少） |
 
 **只有 F0（表示层沉默）在 7B 上稳健，F1–F5 全部 scale-dependent**。
+
+#### 关键图（7B）
+
+**7B within-harmful boxplot**（v2 复制）：跟 3B 结构相同。AZR-Coder-7B 的 within-harmful AUC = 0.192（反向 — projection 低反而 refuse），Coder-7B = 0.457（近 chance）。
+
+![7B v2 within-harmful boxplot](paired_analysis_v2_20260512-0920/fig_within_class_7B.png)
+
+**7B null distribution**：AZR-Coder-7B 红线在 null 分布右尾外侧但**反向**（AUC 0.192 远低于 0.5）；Coder-7B 红线接近 null 中心。
+
+![7B v2 null distribution + Arditi line](paired_analysis_v2_20260512-0920/fig_null_dist_7B.png)
+
+**7B behaviour-transfer cos matrix**（只有 2 donor: Coder + AZR-Coder）：2×2 矩阵，**off-diagonal cos = +0.502**，远偏离 0。跟 3B 上 ≈ 0 形成鲜明对比 — F3 不复制。
+
+![7B behaviour-direction cross-cosine matrix (Coder × AZR-Coder)](behaviour_transfer_20260512-0921/fig_cos_matrix_7B.png)
+
+**7B AZR-Base-7B recipient 分布**：AZR-Base-7B（不能算 v，n_refused=0）的 20 个 harmful comply prompts 在 Coder-7B 的 behaviour 方向上投影 — 落在 Coder comply 区域附近，没有 3B 那种远离 comply 极端的偏移。
+
+![7B AZR-Base-7B projected on Coder-7B's behaviour direction](behaviour_transfer_20260512-0921/fig_recipient_AZR-Base-7B_7B.png)
+
+**7B Qwen2.5-7B recipient 分布**：plain Qwen2.5-7B（0 refused，base 模型）在 Coder-7B 的 behaviour 方向上分布 — 也在 comply 区域，没有显著偏移。
+
+![7B Qwen2.5-7B projected on Coder-7B's behaviour direction](behaviour_transfer_20260512-0921/fig_recipient_Qwen2.5-7B_7B.png)
+
+**7B Bootstrap violin**：1 个 cross-pair (Coder × AZR-Coder)，2 个 same-model Arditi 控制。蓝色 violin 的 median = +0.502，**95% CI 完全在 +0.3 到 +0.7 之间**，跟 3B 的 ±0.2 内完全不同。
+
+![7B bootstrap cosine distributions](bootstrap_cos_20260512-0921/fig_violin_7B.png)
 
 #### 解读：为什么 3B 跟 7B 行为如此不同？
 
