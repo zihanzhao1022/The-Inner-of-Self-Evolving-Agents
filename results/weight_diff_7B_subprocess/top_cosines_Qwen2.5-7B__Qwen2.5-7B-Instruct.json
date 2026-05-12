@@ -1,0 +1,25 @@
+{
+  "a_short": "Qwen2.5-7B",
+  "b_short": "Qwen2.5-7B-Instruct",
+  "a_full": "Qwen/Qwen2.5-7B",
+  "b_full": "Qwen/Qwen2.5-7B-Instruct",
+  "tie_word_embeddings": false,
+  "num_layers": 28,
+  "top_cosines": {
+    "embed": {
+      "cosine": 0.9998591800066355,
+      "diff_norm": 5.358003423778119
+    },
+    "final_norm": {
+      "cosine": 0.9999999999999999,
+      "diff_norm": 0.0
+    },
+    "lm_head": {
+      "cosine": 0.9992538050533848,
+      "diff_norm": 10.813638078875455
+    }
+  },
+  "layer_cos_min": 0.9996103048324585,
+  "layer_cos_max": 1.0,
+  "layer_cos_mean": 0.9998862743377686
+}

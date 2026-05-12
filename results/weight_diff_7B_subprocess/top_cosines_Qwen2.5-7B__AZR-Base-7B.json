@@ -1,0 +1,25 @@
+{
+  "a_short": "Qwen2.5-7B",
+  "b_short": "AZR-Base-7B",
+  "a_full": "Qwen/Qwen2.5-7B",
+  "b_full": "andrewzh2/Absolute_Zero_Reasoner-Base-7b",
+  "tie_word_embeddings": false,
+  "num_layers": 28,
+  "top_cosines": {
+    "embed": {
+      "cosine": 0.9999999694234736,
+      "diff_norm": 0.07883469269454232
+    },
+    "final_norm": {
+      "cosine": 0.9999999999999999,
+      "diff_norm": 0.0
+    },
+    "lm_head": {
+      "cosine": 0.9999998740725863,
+      "diff_norm": 0.13955714247711595
+    }
+  },
+  "layer_cos_min": 0.9999991059303284,
+  "layer_cos_max": 1.0,
+  "layer_cos_mean": 0.9999998807907104
+}

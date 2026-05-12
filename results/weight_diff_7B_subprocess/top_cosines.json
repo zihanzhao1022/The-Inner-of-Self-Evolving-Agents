@@ -1,0 +1,58 @@
+{
+  "top_cosines": {
+    "Qwen2.5-7B__Qwen2.5-7B-Instruct": {
+      "embed": 0.9998591800066355,
+      "final_norm": 0.9999999999999999,
+      "lm_head": 0.9992538050533848
+    },
+    "Qwen2.5-7B__Qwen2.5-Coder-7B": {
+      "embed": 0.17927607858644273,
+      "final_norm": 0.9898219164773632,
+      "lm_head": 0.3811455472570317
+    },
+    "Qwen2.5-7B__AZR-Base-7B": {
+      "embed": 0.9999999694234736,
+      "final_norm": 0.9999999999999999,
+      "lm_head": 0.9999998740725863
+    },
+    "Qwen2.5-Coder-7B__AZR-Coder-7B": {
+      "embed": 0.9999999671175097,
+      "final_norm": 1.0000000000000002,
+      "lm_head": 0.9999999102747673
+    }
+  },
+  "tie_word_embeddings": false,
+  "components_order": [
+    "input_layernorm.weight",
+    "self_attn.q_proj.weight",
+    "self_attn.k_proj.weight",
+    "self_attn.v_proj.weight",
+    "self_attn.o_proj.weight",
+    "post_attention_layernorm.weight",
+    "mlp.gate_proj.weight",
+    "mlp.up_proj.weight",
+    "mlp.down_proj.weight"
+  ],
+  "axis_pairs": {
+    "RLHF": [
+      "Qwen2.5-7B",
+      "Qwen2.5-7B-Instruct"
+    ],
+    "domain": [
+      "Qwen2.5-7B",
+      "Qwen2.5-Coder-7B"
+    ],
+    "self_evolving_direct": [
+      "Qwen2.5-7B",
+      "AZR-Base-7B"
+    ],
+    "self_evolving_via_coder": [
+      "Qwen2.5-Coder-7B",
+      "AZR-Coder-7B"
+    ],
+    "cross_AZR": [
+      "AZR-Base-7B",
+      "AZR-Coder-7B"
+    ]
+  }
+}

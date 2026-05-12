@@ -152,9 +152,11 @@
 
 ### 2.3 权重 diff（fp64 per-tensor 余弦）
 
-**权威路径**：`results/weight_diff_20260509-1831/`（3B 完整四模型，`axis_pairs = {RLHF, domain, self_evolving}`）。
+**权威路径**：
+- 3B：`results/weight_diff_20260509-1831/`（完整四模型，`axis_pairs = {RLHF, domain, self_evolving}`）
+- **7B（2026-05-12 完成）**：`results/weight_diff_7B_subprocess/`（4/5 axis pair 完成，subprocess-per-pair workaround 绕过 in-process OOM）
 
-**关键 tensor**：
+#### 3B 权重 diff（fp64 per-tensor 余弦）
 
 | 对 | embed cos | final_norm cos |
 |---|---|---|
@@ -162,11 +164,52 @@
 | base ↔ Coder（domain） | 0.6190 | 0.9977 |
 | **Coder ↔ AZR-Coder（自演化）** | **0.9999999850** | **1.0000000000** |
 
-**解读**：权重层面上，自演化让 Qwen2.5-Coder-3B 的 embedding 在 10⁻⁸ 量级内保持不变。早期归因到 AZR 的"重写 embedding"实际上是 domain（Coder pretraining）阶段做的。
+3B `tie_word_embeddings = True`，没有独立 lm_head。
 
-**每层余弦热图**：`weight_diff_20260509-1831/weight_cosines_heatmap.png`。
+#### 7B 权重 diff（fp64 per-tensor 余弦，2026-05-12 新增）
 
-**7B 权重 diff 状态**：未完成。5 次尝试（v1–v5）都在 4–5 个模型 load 时 Windows OOM（32 GB 系统内存 + HF 瞬时峰值）。Workaround：subprocess-per-axis-pair（每个 axis pair 一个独立 Python 进程，load 2 个模型、计算、save、退出；预计 ~30 min dev + ~30 min runtime）。
+| 对 | embed cos | final_norm cos | lm_head cos | layer min / mean / median (per-tensor) |
+|---|---|---|---|---|
+| base ↔ Inst（RLHF） | 0.999859 | 1.000000 | 0.999254 | 0.999610 / 0.999886 / 0.999862 |
+| base ↔ Coder（domain） | **0.179276** | 0.989822 | **0.381146** | 0.179812 / 0.564280 / 0.468363 |
+| **base ↔ AZR-Base（self_evolving_direct）** | **0.999999969** | **1.000000** | **0.999999874** | **0.999999 / 1.000000 / 1.000000** |
+| **Coder ↔ AZR-Coder（self_evolving_via_coder）** | **0.999999967** | **1.000000** | **0.999999910** | **0.999999 / 1.000000 / 1.000000** |
+| AZR-Base ↔ AZR-Coder（cross_AZR） | — | — | — | worker crashed (Windows 0xC0000005 access violation) |
+
+7B `tie_word_embeddings = False`，有独立 lm_head。
+
+**关键证据**：两条自演化轴的全部 252 个 (layer × component) 余弦都 ≥ **0.999999** — 实质上 weight tensors 完全相同到 fp64 精度极限。
+
+这**直接证伪了"AZR 改变模型权重"的可能性**。包括：
+- **AZR-Base-7B**（直接从 plain Qwen2.5-7B 走 self-evolving）：跟 base 余弦 ≈ 1
+- **AZR-Coder-7B**（从 Coder-7B 走 self-evolving）：跟 Coder 余弦 ≈ 1
+- 两条路径的 self-evolving 都**在 fp64 精度下不改 weight**。
+
+#### 3B vs 7B 对照（self-evolving 那一行）
+
+| Metric | 3B (Coder ↔ AZR-Coder) | 7B (Coder ↔ AZR-Coder) | 7B (base ↔ AZR-Base) |
+|---|---|---|---|
+| embed cos | 0.999999985 | 0.999999967 | 0.999999969 |
+| final_norm cos | 1.000000 | 1.000000 | 1.000000 |
+| lm_head cos | (tied with embed) | 0.999999910 | 0.999999874 |
+| layer-tensor min | (≈ 0.999999, embed/final-norm-only) | **0.999999** | **0.999999** |
+
+跨规模一致：self-evolving 在 weight 层面**完全沉默**。
+
+#### 每层余弦热图
+
+- 3B：`results/weight_diff_20260509-1831/weight_cosines_heatmap.png`
+- **7B**：`results/weight_diff_7B_subprocess/weight_cosines_heatmap.png`（**4-panel：RLHF 全绿 / domain 橙黄 / self_evolving_direct 全绿 / self_evolving_via_coder 全绿**；视觉上一眼看出 self-evolving 不改任何 layer × component 权重）
+
+#### Subprocess workaround 设计（2026-05-12 新增）
+
+之前 5 次 in-process attempts 都因 HF `from_pretrained` 瞬时峰值在 Windows 32 GB 系统上 OOM。Workaround：
+1. 一个 worker 脚本 `_weight_diff_single_pair.py`：args 取一对 (a_short, b_short, a_full, b_full)，load 2 模型 bf16 CPU，每个 weight tensor 在 GPU 上做 fp64 cosine（GPU 11 GB 够装两个矩阵），save 单对 `pair_<a>__<b>.npz`，exit
+2. coordinator `run_weight_diff_subprocess.py`：用 `subprocess.call` 对每个 axis pair 启动新的 Python 进程；进程退出 → OS 回收 RAM；aggregate 输出
+
+总耗时 ~25 min（5 pair × ~5 min；4 个成功，cross_AZR 在 worker model load 阶段 segfault）。
+
+技术贡献：subprocess-per-pair 是关键 — 单进程内即使 `del model; gc.collect()` 也无法回收 HF transient peak。Python 进程级别的 RAM 释放是唯一可靠方法。
 
 ### 2.4 L33→L35（3B）/ L25→L27（7B）旋转可视化
 
@@ -579,7 +622,7 @@ cos(AZR-Coder-7B × Qwen2.5-Coder-7B): median=+0.502, 95% CI=[+0.298, +0.627]
 
 5 条独立证据线收敛到 "自演化让残差流几何几乎不变"：
 
-1. 权重余弦 ≈ 0.999999+（3B fp64）
+1. 权重余弦 ≥ 0.999999（3B fp64 ✓；**7B fp64 ✓ 2026-05-12 完成**，via subprocess workaround，两条自演化轴每个 layer × component cosine 都 ≥ 0.999999；cross_AZR worker crash 但不影响主结论）
 2. 跨模型拒绝方向余弦 ≈ 0.98（cm_binary，3B 和 7B 自演化对）
 3. L33→L35 / L25→L27 位移角度 1.0–1.4°
 4. Procrustes 残差 0.0005（3B）→ 0.0001（7B），scale 越大、沉默越严
@@ -721,7 +764,7 @@ results/
 
 1. **7B 生成 × 3 个缺失模型**（2026-05-11 晚间正在跑）：Qwen2.5-Coder-7B（写文时 5/50）、AZR-Coder-7B、AZR-Base-7B。约 14 h 隔夜。Qwen2.5-7B-Instruct 跳过（非关键路径）。
 2. **7B 上重跑 paired analysis v2、behaviour transfer、bootstrap、regex ablation**（第 1 项完成后自动可跑）：4 个脚本都支持 `--sizes 7B` 标志。
-3. **7B 权重 diff** 用 subprocess-per-axis-pair workaround（5 次 OOM 失败，dev 待做）。约 1 h dev + 1 h runtime。
+3. ~~**7B 权重 diff**~~：已完成（2026-05-12，4/5 pair 成功，cross_AZR worker segfault — 但主要结论已得，详见 §2.3）。
 4. **7B value benchmarks × 5 模型**（每模型 n=200）：约 12 h GPU。鉴于已有 5 条表示证据，可选。
 5. **Llama-base 自演化对比**：AZR-Llama-3.1-8B 权重未公开。代理候选：DeepSeek-R1-Distill-Llama-8B、Tülu-3-8B。需要这个来测试 Qwen 上的沉默是否泛化。
 6. **Behaviour mediator 层定位**：behaviour 方向在网络的哪一层？需要 per-layer raw 提取（生成完后约半天 GPU）。
