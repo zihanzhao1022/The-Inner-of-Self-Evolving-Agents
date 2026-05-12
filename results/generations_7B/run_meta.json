@@ -1,0 +1,34 @@
+{
+  "timestamp": "7B",
+  "model_set": "7B",
+  "dtype": "bfloat16",
+  "n_harmful": 35,
+  "n_harmless": 15,
+  "max_new_tokens": 512,
+  "wrapping": "QWEN_MIN_CHAT_TEMPLATE (forced minimal Qwen ChatML)",
+  "decoding": "do_sample=False (greedy)",
+  "summaries": {
+    "Qwen2.5-Coder-7B": {
+      "n_done": 50,
+      "n_skipped": 0,
+      "n_new": 50,
+      "elapsed_sec": 14002.776337862015,
+      "out_path": "results\\generations_7B\\Qwen2.5-Coder-7B\\generations.jsonl"
+    },
+    "AZR-Base-7B": {
+      "n_done": 50,
+      "n_skipped": 0,
+      "n_new": 50,
+      "elapsed_sec": 22677.87976002693,
+      "out_path": "results\\generations_7B\\AZR-Base-7B\\generations.jsonl"
+    },
+    "AZR-Coder-7B": {
+      "n_done": 50,
+      "n_skipped": 0,
+      "n_new": 50,
+      "elapsed_sec": 9873.233453035355,
+      "out_path": "results\\generations_7B\\AZR-Coder-7B\\generations.jsonl"
+    }
+  },
+  "written_at": "2026-05-12T04:25:58.817576"
+}

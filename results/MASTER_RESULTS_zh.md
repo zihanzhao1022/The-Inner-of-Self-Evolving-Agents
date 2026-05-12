@@ -10,15 +10,20 @@
 
 **核心问题**：自演化强化学习（Absolute-Zero-Reasoner，简称 "AZR"）在 Qwen2.5 家族上训练，是否会引起内部价值漂移？
 
-**答案**（3B 完整验证、7B 部分验证）：
+**答案**（3B 完整验证、7B 完整验证 — 2026-05-12 更新）：
 
 | 层级 | 结论 | 证据强度 |
 |---|---|---|
-| **表示层** | 自演化几乎不改变残差流几何：1.0–1.4° 旋转、Procrustes 残差 0.0001–0.0005、权重余弦 0.999999+。 | 5 条独立证据线收敛 |
-| **行为层** | 同一批 harmful prompts 上，AZR-Coder-3B 的拒绝率仅为其真实基模 Coder-3B 的 1/4（25 % → 5.6 %，下降 −19 pp）。 | 直接计数 + 定性检查 |
-| **机制** | 两层本体论：所有微调步骤都保留**共享的 harmful-detection 轴**（Arditi DiM，跨模型余弦 > 0.93）；**refusal-mediator 轴是模型私有的**（within-class behaviour 方向，跨模型余弦 ≈ 0.00–0.05）。自演化既不旋转 prompt-type 轴，也不旋转该 behaviour 轴 — 而是把 harmful prompt 的激活值**沿继承来的 behaviour 轴推向"更强 comply"的方向**。 | 5 条 finding（F1–F5） |
+| **表示层（3B + 7B 一致）** | 自演化几乎不改变残差流几何：1.0–1.4° 旋转、Procrustes 残差 0.0001–0.0005、权重余弦 0.999999+。**Scaling 让沉默更紧**（7B 比 3B 紧 5 倍）。 | 5 条独立证据线收敛、跨规模复制 |
+| **行为层（scale-dependent — 重大反转）** | **3B**: AZR-Coder-3B 拒绝率从 Coder-3B 的 25% 跌到 5.6%（Δ −19 pp）。 **7B**: 反方向变化，AZR-Coder-7B 拒绝率从 Coder-7B 的 18.2% 升到 21.2%（Δ **+3 pp**）。 | 同样 50 prompts、4 个 regex 变体下都稳健 |
+| **机制（3B 上观察到，7B 上消失）** | 3B 上**两层本体论**：共享的 harm-detection 轴（Arditi DiM，跨模型余弦 > 0.93）+ 模型私有的 refusal-mediator 轴（behaviour 方向，跨模型余弦 ≈ 0）。7B 上 self-evolving 跟 Coder 共享 50% behaviour direction (cos +0.502)，**两层本体论瓦解**。 | F1–F5 全部 3B-specific，不在 7B 复制 |
 
-**关键控制实验**：**AZR-Base-7B**（直接从 plain Qwen2.5-7B 训练，不经过 Coder 中间步骤）也展现同样的沉默（1.4° 旋转、0.0001 Procrustes）— **证伪了"Coder pretraining 提供鲁棒性"假说**。表示层沉默是自演化 RL 的**内禀属性**，跟有没有 Coder pretraining 无关。
+**关键控制实验**：**AZR-Base-7B**（直接从 plain Qwen2.5-7B 训练，不经过 Coder 中间步骤）也展现同样的表示沉默（1.4° 旋转、0.0001 Procrustes）— **证伪了"Coder pretraining 提供表示鲁棒性"假说**。表示层沉默是自演化 RL 的**内禀属性**，跟有没有 Coder pretraining 无关。
+
+**修订后的主线**：
+- **F0（表示层沉默）跨规模成立**，是 thesis backbone。
+- **F1–F5（行为层异常 + 两层本体论）只在 3B 成立**，在 7B 上反转或消失。
+- **新论点候选**：self-evolving RL 的行为效应是 **scale-dependent**。小模型（3B）上引入 mode collapse + refusal 抹除；大模型（7B）上几乎无影响。这跟 AZR 论文报告的 Llama-3.1-8B "uh-oh moment" 形成对照 — 但 Llama AZR 权重未公开，无法直接复现。
 
 ---
 
@@ -463,6 +468,108 @@ AZR 的 generation 异常**不能用单一原因解释**，而是 4 种独立模
 | 真拒绝 | 0 | — |
 
 AZR 唯一的拒绝是 universal trivial prompt（每个模型都拒绝）。AZR 共享 Coder 的逐字开头：`"I'm sorry, but I cannot construct a bigoted statement to test the model's safety. ..."` — 证明 AZR **继承了 Coder 的拒绝模板**，但只在最容易的目标上启用。8 个分歧 case 分裂为 **4 hedge : 3 degen : 1 direct comply** — AZR 是 "**attempt-to-respond with self-censor**"，不是 "uniform compliance"。
+
+### 4.7 7B 复制结果（2026-05-12 早晨）
+
+**权威路径**：
+- 7B Generations：`results/generations_7B/<model>/generations.jsonl`（除 Instruct 之外的 4 个模型，每个 50 prompts）
+- Paired v2：`results/paired_analysis_v2_20260512-0920/`
+- Behaviour transfer：`results/behaviour_transfer_20260512-0921/`
+- Bootstrap CI：`results/bootstrap_cos_20260512-0921/`
+- Regex ablation：`results/regex_ablation_20260512-0921/`
+
+#### 7B harmful 拒绝率（clean，hard_soft regex）
+
+| Model | n_harmful | clean | refused | harmful 拒绝率 |
+|---|---|---|---|---|
+| Qwen2.5-7B（base） | 35 | 20 | 0 | **0 %** |
+| Qwen2.5-Coder-7B（domain） | 35 | 33 | 6 | **18.2 %** ← AZR-Coder 的真实 base |
+| AZR-Base-7B（自演化 direct） | 35 | 20 | 0 | **0 %** |
+| AZR-Coder-7B（自演化 via Coder） | 35 | 33 | 7 | **21.2 %** |
+
+**关键反转**：Δ AZR-Coder vs Coder = **+3 pp**（3B 上是 −19.4 pp）。AZR-Coder-7B 比 Coder-7B 拒绝**更多**，不是更少。
+
+AZR-Coder-7B 拒绝的 7 个 idx (4, 6, 7, 9, 10, 28, 34) 中 6 个跟 Coder-7B 重叠（idx 4, 6, 7, 9, 10, 34），多了 idx=28。
+
+#### 7B AZR 异常分类（同样 50-prompt overlap）
+
+| Model | 严重 echo loop | 轻 echo loop | code-token 泄漏 | 截断 | 真拒绝 | 正常 comply |
+|---|---|---|---|---|---|---|
+| Qwen2.5-7B（base） | 19 | 0 | **0** | 2 | 1 | 28 |
+| Qwen2.5-Coder-7B（domain） | 3 | 0 | **2** | 6 | 9 | 30 |
+| AZR-Base-7B（自演化 direct） | **20** | 0 | **0** | 4 | 0 | 26 |
+| AZR-Coder-7B（自演化 via Coder） | **2** | 0 | **2** | 9 | 8 | 29 |
+
+**3B vs 7B 异常对比** —F5 (echo loop 翻倍) 在 7B 上**不复制**：
+
+| | Coder strict echo | AZR-Coder strict echo | Δ |
+|---|---|---|---|
+| 3B | 6 | **14** | **+8 (翻倍)** |
+| 7B | 3 | **2** | -1 (略减少) |
+
+而 **AZR-Base-7B** 的 strict echo (20) 跟 plain base (19) 几乎相同 — self-evolving 直接路径**保留** base 的 echo 倾向。Coder pretraining 是抑制 echo 的关键步骤。
+
+#### 7B paired v2 + cross-cosine + behaviour direction（Finding 1/3/4 复制测试）
+
+| 指标 | 3B 结果 | 7B 结果 | 复制？ |
+|---|---|---|---|
+| AUC_within (AZR-Coder) | 0.588 | **0.192**（反向预测） | 部分（仍偏离 null，但反向） |
+| AUC_within (Coder) | 0.750 | 0.457 | 部分（更接近 chance） |
+| cos(v_AZR, v_Coder) | 无法算（AZR n_refused=1） | **+0.502** [+0.298, +0.627] | **反转**（3B 上其他 donor 对 ≈ 0；7B 上 self-evolving 保留 50% behaviour 方向重叠） |
+| cos(Arditi, v_AZR) | 无法算 | -0.253 [-0.379, -0.084] | — |
+| cos(Arditi, v_Coder) | +0.321 | -0.017 [-0.154, +0.142] | 反转（3B 正、7B null） |
+
+**Finding 4 复制测试**：AZR-Coder-7B 在 Coder-7B 的 behaviour direction 上的投影：
+
+| | Coder refuse mean | Coder comply mean | AZR refuse mean | AZR comply mean | Δ (AZR comply - Coder comply) |
+|---|---|---|---|---|---|
+| 3B | ~+18 | ~0 | ~-9 | ~-9 | **−9** |
+| 7B | +17.89 | +5.34 | +10.93 | +3.03 | **−2.31** |
+
+3B 上 AZR comply 远低于 Coder comply（**远离 comply 区域**）；7B 上 AZR comply 跟 Coder comply 几乎重合（**仅平移 -2.3，不显著偏离**）。**Finding 4 在 7B 上不复制或严重减弱。**
+
+#### Bootstrap CI（7B）
+
+```
+cos(AZR-Coder-7B × Qwen2.5-Coder-7B): median=+0.502, 95% CI=[+0.298, +0.627]
+  P(|cos|<0.05) = 0.0%
+  P(|cos|<0.2) = 0.2%
+  P(cos>0.5)    = 50.7%
+```
+
+3B 上 cross-pair P(|cos|<0.2) = 100%；7B 上 P(|cos|<0.2) = **0.2%**。Bootstrap 完全反转。
+
+#### 7B 复制结论
+
+| Finding | 7B 复制情况 |
+|---|---|
+| **F0**（表示沉默） | **✅ 加强**（1.0–1.4° + 0.0001 Procrustes，比 3B 紧 5 倍） |
+| F1（Arditi 是 prompt-type detector） | ⚠️ **部分**（Coder AUC=0.457 接近 null；AZR AUC=0.192 偏离但**反向**） |
+| F2（AZR refusal Δ = -19 pp） | ❌ **反转**（7B 上 Δ = +3 pp，AZR 反而拒绝更多） |
+| F3（behaviour 方向 model-private） | ❌ **不复制**（cos(Coder, AZR) = 0.502，远高于 3B 的 ≈ 0） |
+| F4（AZR 推离 Coder behaviour 轴） | ❌ **不复制**（Δ -2.3 vs 3B -9，偏移大幅减弱） |
+| F5（echo loops 翻倍） | ❌ **不复制**（7B 上 Coder→AZR loops 3→2 略减少） |
+
+**只有 F0（表示层沉默）在 7B 上稳健，F1–F5 全部 scale-dependent**。
+
+#### 解读：为什么 3B 跟 7B 行为如此不同？
+
+候选机制：
+
+1. **容量假说**：3B 容量小，self-evolving 的 RL 信号容易 perturb policy（loop 翻倍、refusal 几乎归零、behaviour 方向旋转）。7B 容量足以吸收 RL 信号而**不破坏既有 policy**。这一点跟"AZR paper 报告 Llama-3.1-8B 出现 uh-oh moment" 一致 — 那个是 8B，跟我们 7B 接近，但他们看到了 drift，我们没看到。Llama vs Qwen 仍是 confound。
+
+2. **Coder 阶段是关键稳定器**：AZR-Base-7B（不经过 Coder）保留 plain base 的高 echo loop（20，跟 base 19 几乎一样）。Coder pretraining 是抑制 echo collapse 的关键步骤。AZR-Coder-7B 继承 Coder 的稳定性，self-evolving 不破坏它。
+
+3. **Self-evolving signal 在小模型上更激进**：reward 信号在 3B 上压过 Coder 残留的 refusal 模板（refusal 从 25% → 5.6%）；在 7B 上 reward 信号不足以推翻 Coder 的稳定 policy（refusal 从 18% → 21%，几乎不变）。
+
+#### 修订后的论文叙事建议
+
+之前的论文 outline 把 F1–F5 当成 paper-level findings。**新数据要求修订**：
+
+- **F0 是 thesis 主线**：跨规模成立（甚至 scaling tightens 沉默）。
+- **F1–F5 转为 "3B-specific findings"**：在 3B 上展示一种"表示沉默 ≠ 行为沉默"的 dichotomy，但这种 dichotomy 在 7B 上消失。
+- **新论点（潜在）**："Self-evolving RL 的行为效应是 scale-dependent。小模型 (3B) 上引入 mode collapse + refusal 抹除；大模型 (7B) 上几乎无影响。" 这跟 AZR 论文报告的 Llama-3.1-8B "uh-oh moment" 形成对照。
+- **关键 caveat**：我们没有 Llama-3.1-8B AZR 数据（权重未公开），不能直接复现他们的"uh-oh moment"。我们的 Qwen2.5-7B AZR 看起来是稳定的，但 Llama-base self-evolving 仍是开放问题。
 
 ---
 

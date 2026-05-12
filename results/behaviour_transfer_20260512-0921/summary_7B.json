@@ -1,0 +1,79 @@
+{
+  "size": "7B",
+  "donors": [
+    "AZR-Coder-7B",
+    "Qwen2.5-Coder-7B"
+  ],
+  "recipients": [
+    "AZR-Base-7B",
+    "AZR-Coder-7B",
+    "Qwen2.5-7B",
+    "Qwen2.5-Coder-7B"
+  ],
+  "non_donors": [
+    "AZR-Base-7B",
+    "Qwen2.5-7B"
+  ],
+  "cross_cosine_matrix": {
+    "rows": [
+      "AZR-Coder-7B",
+      "Qwen2.5-Coder-7B"
+    ],
+    "cols": [
+      "AZR-Coder-7B",
+      "Qwen2.5-Coder-7B"
+    ],
+    "values": [
+      [
+        1.0,
+        0.6637398875914342
+      ],
+      [
+        0.6637398875914342,
+        1.0
+      ]
+    ]
+  },
+  "transfer_auc_matrix": {
+    "rows_donor": [
+      "AZR-Coder-7B",
+      "Qwen2.5-Coder-7B"
+    ],
+    "cols_recipient": [
+      "AZR-Base-7B",
+      "AZR-Coder-7B",
+      "Qwen2.5-7B",
+      "Qwen2.5-Coder-7B"
+    ],
+    "values": [
+      [
+        NaN,
+        0.9505494505494505,
+        NaN,
+        0.9444444444444444
+      ],
+      [
+        NaN,
+        0.956043956043956,
+        NaN,
+        0.9691358024691358
+      ]
+    ]
+  },
+  "cos_arditi_x_behaviour_per_donor": {
+    "AZR-Coder-7B": -0.28805529899068505,
+    "Qwen2.5-Coder-7B": -0.015159317437293244
+  },
+  "n_refused_harmful_per_model": {
+    "AZR-Base-7B": 0,
+    "AZR-Coder-7B": 7,
+    "Qwen2.5-7B": 0,
+    "Qwen2.5-Coder-7B": 6
+  },
+  "n_comply_harmful_per_model": {
+    "AZR-Base-7B": 20,
+    "AZR-Coder-7B": 26,
+    "Qwen2.5-7B": 20,
+    "Qwen2.5-Coder-7B": 27
+  }
+}
