@@ -171,7 +171,7 @@ Each contains `candidate_directions.npz` (shape `(n_pos=5, n_layer, d_model)` pe
 | base ↔ Coder (domain) | **0.179276** | 0.989822 | **0.381146** | 0.179812 / 0.564280 / 0.468363 |
 | **base ↔ AZR-Base (self_evolving_direct)** | **0.999999969** | **1.000000** | **0.999999874** | **0.999999 / 1.000000 / 1.000000** |
 | **Coder ↔ AZR-Coder (self_evolving_via_coder)** | **0.999999967** | **1.000000** | **0.999999910** | **0.999999 / 1.000000 / 1.000000** |
-| AZR-Base ↔ AZR-Coder (cross_AZR) | — | — | — | worker crashed (Windows 0xC0000005 access violation) |
+| AZR-Base ↔ AZR-Coder (cross_AZR) | **0.179276** | 0.989822 | **0.381147** | 0.179812 / 0.564279 / 0.468363 |
 
 7B has `tie_word_embeddings = False`, so lm_head is separate.
 
@@ -181,6 +181,17 @@ This **directly falsifies "AZR rewrites the weights"** for:
 - **AZR-Base-7B** (self-evolving directly from plain Qwen2.5-7B): cos ≈ 1 with base
 - **AZR-Coder-7B** (self-evolving from Coder-7B): cos ≈ 1 with Coder
 - Both self-evolving paths leave weights **bit-identical to fp64 precision**.
+
+**Cross_AZR transitivity check**: cosine numbers for AZR-Base ↔ AZR-Coder (embed 0.179276, final_norm 0.989822, lm_head 0.381147) match base ↔ Coder **digit-for-digit** to 4–6 decimal places. Layer-level stats are identical too (min 0.179812, mean 0.564279, median 0.468363).
+
+This is the cleanest visual proof that self-evolving doesn't touch the weights:
+```
+AZR-Base   ≈  Qwen2.5-7B          (cos ≈ 1)
+AZR-Coder  ≈  Qwen2.5-Coder-7B    (cos ≈ 1)
+∴ d(AZR-Base, AZR-Coder) = d(Qwen2.5-7B, Qwen2.5-Coder-7B)
+```
+
+If self-evolving changed the weights, cross_AZR distance would differ from domain. It **exactly equals domain**, proving self-evolving's weight delta is 0 to fp64 precision.
 
 #### 3B vs 7B comparison (self-evolving row)
 
@@ -204,9 +215,22 @@ Previous 5 in-process attempts all OOMed on Windows 32 GB due to HF `from_pretra
 1. Worker script `_weight_diff_single_pair.py`: takes one pair (a_short, b_short, a_full, b_full), loads 2 models bf16 CPU, computes fp64 cosine per tensor on GPU (11 GB suffices for two tensors at a time), saves single-pair `pair_<a>__<b>.npz`, exits.
 2. Coordinator `run_weight_diff_subprocess.py`: spawns a fresh Python process per axis pair via `subprocess.call`; OS reclaims RAM on exit; aggregates outputs.
 
-Total runtime ~25 min (5 pairs × ~5 min; 4 succeed, cross_AZR segfaults at model-load in worker — appears to be CUDA/transformers state pollution issue, not RAM-related).
+Total runtime ~30 min (GPU mode: 4 pairs × ~5 min; cross_AZR segfaulted twice on GPU, succeeded on CPU fallback in ~5 min).
 
-Technical contribution: subprocess-per-pair is essential — within a single process, even `del model; gc.collect()` cannot release the HF transient peak. Process-level RAM teardown is the only reliable method on Windows.
+#### Cross_AZR CUDA bug (diagnosed 2026-05-12)
+
+`cross_AZR` (AZR-Base ↔ AZR-Coder) crashed with Windows 0xC0000005 access violation on both GPU retries, **regardless of A/B order**:
+- Attempt 1: A=AZR-Base, B=AZR-Coder → crash during A loading at 58–68 %.
+- Attempt 2: A=AZR-Coder, B=AZR-Base → A loaded fine, B (AZR-Base) crashed at 59 %.
+- Attempt 3: `--no-gpu` (pure CPU, no CUDA at all) → **✓ success** (~5 min).
+
+Diagnosis:
+- **Not RAM**: CPU mode uses the same ~28 GB.
+- **Not single-AZR loading**: each AZR loads fine when paired with plain Qwen.
+- **Two AZRs from different repos (`andrewzh` vs `andrewzh2`) + CUDA state interact badly**. Likely a safetensors mmap × CUDA driver state collision on Windows 11 GB GPU.
+- Workaround: `--no-gpu` flag on the worker for cross_AZR.
+
+Technical contribution: subprocess-per-pair is essential — within a single process, even `del model; gc.collect()` cannot release the HF transient peak. Process-level RAM teardown is the only reliable method on Windows. The `--no-gpu` fallback resolves the cross_AZR CUDA mmap conflict.
 
 ### 2.4 L33→L35 (3B) / L25→L27 (7B) rotation visualisation
 

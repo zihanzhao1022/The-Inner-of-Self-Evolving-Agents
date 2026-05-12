@@ -1,0 +1,25 @@
+{
+  "a_short": "AZR-Base-7B",
+  "b_short": "AZR-Coder-7B",
+  "a_full": "andrewzh2/Absolute_Zero_Reasoner-Base-7b",
+  "b_full": "andrewzh/Absolute_Zero_Reasoner-Coder-7b",
+  "tie_word_embeddings": false,
+  "num_layers": 28,
+  "top_cosines": {
+    "embed": {
+      "cosine": 0.17927605020320234,
+      "diff_norm": 428.52036668428457
+    },
+    "final_norm": {
+      "cosine": 0.9898219164773632,
+      "diff_norm": 53.800433264866975
+    },
+    "lm_head": {
+      "cosine": 0.3811471429199345,
+      "diff_norm": 343.2194057911547
+    }
+  },
+  "layer_cos_min": 0.1798117458820343,
+  "layer_cos_max": 0.999687671661377,
+  "layer_cos_mean": 0.5642794370651245
+}

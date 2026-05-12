@@ -1,5 +1,5 @@
 {
-  "timestamp": "20260512-0953",
+  "timestamp": "20260512-1124",
   "model_set": "7B",
   "dtype": "bfloat16",
   "num_layers": 28,
@@ -33,29 +33,7 @@
       "AZR-Coder-7B"
     ]
   },
-  "pair_results": {
-    "RLHF": {
-      "status": "ok",
-      "pair_tag": "Qwen2.5-7B__Qwen2.5-7B-Instruct"
-    },
-    "domain": {
-      "status": "ok",
-      "pair_tag": "Qwen2.5-7B__Qwen2.5-Coder-7B"
-    },
-    "self_evolving_direct": {
-      "status": "ok",
-      "pair_tag": "Qwen2.5-7B__AZR-Base-7B"
-    },
-    "self_evolving_via_coder": {
-      "status": "ok",
-      "pair_tag": "Qwen2.5-Coder-7B__AZR-Coder-7B"
-    },
-    "cross_AZR": {
-      "status": "error",
-      "exit_code": 3221225477,
-      "pair_tag": "AZR-Base-7B__AZR-Coder-7B"
-    }
-  },
+  "pair_results": {},
   "method": "subprocess-per-axis-pair (workaround for 7B in-process OOM)",
-  "written_at": "2026-05-12T10:02:15.586988"
+  "written_at": "2026-05-12T11:24:47.794309"
 }

@@ -19,6 +19,11 @@
       "embed": 0.9999999671175097,
       "final_norm": 1.0000000000000002,
       "lm_head": 0.9999999102747673
+    },
+    "AZR-Base-7B__AZR-Coder-7B": {
+      "embed": 0.17927605020320234,
+      "final_norm": 0.9898219164773632,
+      "lm_head": 0.3811471429199345
     }
   },
   "tie_word_embeddings": false,

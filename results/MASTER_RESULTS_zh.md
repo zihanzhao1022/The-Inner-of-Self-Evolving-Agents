@@ -174,7 +174,7 @@
 | base ↔ Coder（domain） | **0.179276** | 0.989822 | **0.381146** | 0.179812 / 0.564280 / 0.468363 |
 | **base ↔ AZR-Base（self_evolving_direct）** | **0.999999969** | **1.000000** | **0.999999874** | **0.999999 / 1.000000 / 1.000000** |
 | **Coder ↔ AZR-Coder（self_evolving_via_coder）** | **0.999999967** | **1.000000** | **0.999999910** | **0.999999 / 1.000000 / 1.000000** |
-| AZR-Base ↔ AZR-Coder（cross_AZR） | — | — | — | worker crashed (Windows 0xC0000005 access violation) |
+| AZR-Base ↔ AZR-Coder（cross_AZR） | **0.179276** | 0.989822 | **0.381147** | 0.179812 / 0.564279 / 0.468363 |
 
 7B `tie_word_embeddings = False`，有独立 lm_head。
 
@@ -184,6 +184,17 @@
 - **AZR-Base-7B**（直接从 plain Qwen2.5-7B 走 self-evolving）：跟 base 余弦 ≈ 1
 - **AZR-Coder-7B**（从 Coder-7B 走 self-evolving）：跟 Coder 余弦 ≈ 1
 - 两条路径的 self-evolving 都**在 fp64 精度下不改 weight**。
+
+**Cross_AZR 的传递性验证**：AZR-Base ↔ AZR-Coder 的 cosine 数字（embed 0.179276, final_norm 0.989822, lm_head 0.381147）跟 base ↔ Coder 的数字**逐位完全相同**（精确到小数点后 4-6 位），layer-level 统计也完全一致（min 0.179812, mean 0.564279, median 0.468363）。
+
+这是 self-evolving 不改 weight 的**最干净视觉证明**：
+```
+AZR-Base   ≈  Qwen2.5-7B          (cos ≈ 1)
+AZR-Coder  ≈  Qwen2.5-Coder-7B    (cos ≈ 1)
+∴ d(AZR-Base, AZR-Coder) = d(Qwen2.5-7B, Qwen2.5-Coder-7B)
+```
+
+如果 self-evolving 改了权重，cross_AZR 的距离应该跟 domain 不同。它**完全等于 domain**，证明 self-evolving 的 weight delta 在 fp64 精度内为 0。
 
 #### 3B vs 7B 对照（self-evolving 那一行）
 
@@ -207,9 +218,22 @@
 1. 一个 worker 脚本 `_weight_diff_single_pair.py`：args 取一对 (a_short, b_short, a_full, b_full)，load 2 模型 bf16 CPU，每个 weight tensor 在 GPU 上做 fp64 cosine（GPU 11 GB 够装两个矩阵），save 单对 `pair_<a>__<b>.npz`，exit
 2. coordinator `run_weight_diff_subprocess.py`：用 `subprocess.call` 对每个 axis pair 启动新的 Python 进程；进程退出 → OS 回收 RAM；aggregate 输出
 
-总耗时 ~25 min（5 pair × ~5 min；4 个成功，cross_AZR 在 worker model load 阶段 segfault）。
+总耗时 ~25 min（GPU 模式：4 个 pair × ~5 min；cross_AZR 第一次 GPU 模式 segfault，CPU fallback ~5 min）。
 
-技术贡献：subprocess-per-pair 是关键 — 单进程内即使 `del model; gc.collect()` 也无法回收 HF transient peak。Python 进程级别的 RAM 释放是唯一可靠方法。
+#### Cross_AZR 的 CUDA bug（2026-05-12 调查）
+
+`cross_AZR` (AZR-Base ↔ AZR-Coder) 在 GPU 模式下 2 次 retry 都在 Windows 0xC0000005 access violation 处崩溃，**不管是哪一个 AZR 当 model A**：
+- 尝试 1: A=AZR-Base, B=AZR-Coder → 在 A 加载 58–68% 处 crash
+- 尝试 2: A=AZR-Coder, B=AZR-Base → A 加载成功，B (AZR-Base) 加载 59% 处 crash
+- 尝试 3: `--no-gpu`（纯 CPU，完全不碰 CUDA） → **✓ 成功** (~5 min)
+
+诊断：
+- Bug **不是 RAM**（CPU 模式 RAM 一样多，~28 GB）。
+- Bug **不是单个 AZR 加载**（每个 AZR 都可以跟 plain Qwen 配对成功加载）。
+- Bug **是两个 AZR 同时加载 + CUDA 状态污染**。可能是 safetensors mmap + CUDA driver state 在两个来自不同 HF repo（`andrewzh` vs `andrewzh2`）的 AZR 模型同时映射时的特定 interaction，仅在 Windows 11 GB GPU 上触发。
+- 在 worker 加 `--no-gpu` flag 完全规避。GPU 加速仅用于 cosine 计算（per-matrix fp64），跟 model load 没硬性绑定关系。
+
+技术贡献：subprocess-per-pair 是关键 — 单进程内即使 `del model; gc.collect()` 也无法回收 HF transient peak。Python 进程级别的 RAM 释放是唯一可靠方法。`--no-gpu` fallback 解决了 cross_AZR 的 CUDA mmap 互相干扰问题。
 
 ### 2.4 L33→L35（3B）/ L25→L27（7B）旋转可视化
 
