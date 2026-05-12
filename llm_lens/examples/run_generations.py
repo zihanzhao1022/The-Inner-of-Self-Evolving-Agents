@@ -130,6 +130,7 @@ def generate_for_model(
     out_dir: str,
     max_new_tokens: int,
     dtype: torch.dtype,
+    use_chat_template: bool = True,
 ) -> dict:
     """Load model, generate for each prompt, save atomically. Resume-safe:
     skips items whose prompt_idx already appears in the output file."""
@@ -171,11 +172,19 @@ def generate_for_model(
     print(f"  model loaded; generating {len(pending)} prompts (max_new_tokens={max_new_tokens})...",
           flush=True)
 
+    wrapping_tag = "QWEN_MIN_CHAT_TEMPLATE" if use_chat_template else "RAW_NO_TEMPLATE"
+    print(f"  wrapping mode: {wrapping_tag}", flush=True)
+
     t0 = time.time()
     for j, it in enumerate(pending):
-        wrapped = apply_qwen_min_chat_template(it["prompt"])
-        inputs = tok(wrapped, return_tensors="pt",
-                     add_special_tokens=False).to("cuda")
+        if use_chat_template:
+            wrapped = apply_qwen_min_chat_template(it["prompt"])
+            inputs = tok(wrapped, return_tensors="pt",
+                         add_special_tokens=False).to("cuda")
+        else:
+            # Raw prompt, let tokenizer add BOS if it wants (Qwen2.5 doesn't add one)
+            inputs = tok(it["prompt"], return_tensors="pt",
+                         add_special_tokens=False).to("cuda")
         prompt_len = int(inputs["input_ids"].shape[1])
         with torch.no_grad():
             out_ids = model.generate(
@@ -201,7 +210,7 @@ def generate_for_model(
             "generation":    generation,
             "n_new_tokens":  n_new,
             "stop_reason":   stop_reason,
-            "wrapping":      "QWEN_MIN_CHAT_TEMPLATE",
+            "wrapping":      wrapping_tag,
             **cot_info,
         }
         _atomic_append_jsonl(out_path, record)
@@ -246,6 +255,10 @@ def main():
     p.add_argument("--results-root", default="results")
     p.add_argument("--output-suffix", default=None,
                    help="Override timestamp suffix (default: now)")
+    p.add_argument("--no-chat-template", action="store_true",
+                   help="Skip the Qwen ChatML wrapping. Use to test whether "
+                        "observed loop pathologies in base models are a chat-"
+                        "template artifact vs intrinsic generation instability.")
     args = p.parse_args()
 
     dtype = parse_dtype(args.dtype)
@@ -268,7 +281,8 @@ def main():
             summaries[short] = generate_for_model(
                 full=full, short=short,
                 items=items, out_dir=out_dir,
-                max_new_tokens=args.max_new_tokens, dtype=dtype)
+                max_new_tokens=args.max_new_tokens, dtype=dtype,
+                use_chat_template=not args.no_chat_template)
         except Exception as e:
             import traceback
             traceback.print_exc()
