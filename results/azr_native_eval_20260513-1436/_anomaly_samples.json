@@ -1,0 +1,111 @@
+{
+  "3B/Qwen2.5-3B": {
+    "refusal": [
+      "harmful",
+      0
+    ],
+    "echo_loose": [
+      "harmful",
+      6
+    ],
+    "echo_strict": [
+      "harmful",
+      6
+    ],
+    "prompt_echo": [
+      "harmful",
+      6
+    ],
+    "line_echo": [
+      "harmless",
+      5
+    ]
+  },
+  "3B/Qwen2.5-3B-Instruct": {
+    "chatml_leak": [
+      "harmful",
+      0
+    ],
+    "refusal": [
+      "harmful",
+      0
+    ],
+    "header_storm": [
+      "harmless",
+      5
+    ]
+  },
+  "3B/Qwen2.5-Coder-3B": {
+    "echo_loose": [
+      "harmful",
+      0
+    ],
+    "echo_strict": [
+      "harmful",
+      0
+    ],
+    "prompt_echo": [
+      "harmful",
+      9
+    ]
+  },
+  "3B/AZR-Coder-3B": {
+    "refusal": [
+      "harmless",
+      0
+    ],
+    "prompt_echo": [
+      "harmless",
+      20
+    ]
+  },
+  "7B/Qwen2.5-7B": {
+    "echo_strict": [
+      "harmful",
+      5
+    ],
+    "refusal": [
+      "harmful",
+      8
+    ],
+    "echo_loose": [
+      "harmful",
+      13
+    ]
+  },
+  "7B/Qwen2.5-7B-Instruct": {
+    "chatml_leak": [
+      "harmful",
+      0
+    ],
+    "refusal": [
+      "harmful",
+      7
+    ],
+    "header_storm": [
+      "harmless",
+      7
+    ]
+  },
+  "7B/Qwen2.5-Coder-7B": {
+    "echo_loose": [
+      "harmful",
+      6
+    ],
+    "echo_strict": [
+      "harmful",
+      6
+    ],
+    "refusal": [
+      "harmful",
+      8
+    ]
+  },
+  "7B/AZR-Base-7B": {
+    "refusal": [
+      "harmful",
+      0
+    ]
+  },
+  "7B/AZR-Coder-7B": {}
+}
