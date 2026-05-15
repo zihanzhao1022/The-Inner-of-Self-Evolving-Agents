@@ -61,9 +61,10 @@ if _root not in sys.path:
 from llm_lens.datasets import load_prompts
 from llm_lens.extractor import QWEN_MIN_CHAT_TEMPLATE, apply_qwen_min_chat_template
 from llm_lens.model_zoo import (
-    MODEL_SETS, get_models, parse_dtype,
+    MODEL_SETS, get_models, parse_dtype, get_native_template,
     DEFAULT_MODEL_SET, DEFAULT_DTYPE, DTYPE_CHOICES,
 )
+from llm_lens.templates import wrap_prompt, WRAPPERS
 
 
 def _build_prompt_set(n_harmful: int = 100, n_harmless: int = 50,
@@ -130,15 +131,29 @@ def generate_for_model(
     out_dir: str,
     max_new_tokens: int,
     dtype: torch.dtype,
-    use_chat_template: bool = True,
+    template_mode: str = "auto",
 ) -> dict:
     """Load model, generate for each prompt, save atomically. Resume-safe:
-    skips items whose prompt_idx already appears in the output file."""
+    skips items whose prompt_idx already appears in the output file.
+
+    template_mode:
+      - "auto"        : use the in-distribution template for this model
+                        (from model_zoo.NATIVE_TEMPLATE)
+      - "raw"         : feed prompt verbatim
+      - "qwen_chatml" : full official Qwen ChatML via apply_chat_template
+      - "azr_r1"      : AZR's DeepSeek-R1-style instruction_following
+    """
     from transformers import AutoModelForCausalLM, AutoTokenizer
 
     print(f"\n{'=' * 60}\n  GENERATIONS — {short}\n{'=' * 60}", flush=True)
     out_path = os.path.join(out_dir, short, "generations.jsonl")
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
+
+    # Resolve template mode: auto → per-model native, else use as-is.
+    effective_mode = (get_native_template(short) if template_mode == "auto"
+                      else template_mode)
+    print(f"  template_mode (requested): {template_mode}", flush=True)
+    print(f"  template_mode (effective): {effective_mode}", flush=True)
 
     # Resume support — skip already-done (class, prompt_idx) pairs.
     done = set()
@@ -160,7 +175,8 @@ def generate_for_model(
     if not pending:
         print(f"  all {len(items)} prompts already done, skipping model load", flush=True)
         return {"n_done": len(items), "n_skipped": 0, "n_new": 0,
-                "elapsed_sec": 0.0, "out_path": out_path}
+                "elapsed_sec": 0.0, "out_path": out_path,
+                "template_mode": effective_mode}
 
     tok = AutoTokenizer.from_pretrained(full, trust_remote_code=True)
     if tok.pad_token_id is None:
@@ -172,19 +188,11 @@ def generate_for_model(
     print(f"  model loaded; generating {len(pending)} prompts (max_new_tokens={max_new_tokens})...",
           flush=True)
 
-    wrapping_tag = "QWEN_MIN_CHAT_TEMPLATE" if use_chat_template else "RAW_NO_TEMPLATE"
-    print(f"  wrapping mode: {wrapping_tag}", flush=True)
-
     t0 = time.time()
     for j, it in enumerate(pending):
-        if use_chat_template:
-            wrapped = apply_qwen_min_chat_template(it["prompt"])
-            inputs = tok(wrapped, return_tensors="pt",
-                         add_special_tokens=False).to("cuda")
-        else:
-            # Raw prompt, let tokenizer add BOS if it wants (Qwen2.5 doesn't add one)
-            inputs = tok(it["prompt"], return_tensors="pt",
-                         add_special_tokens=False).to("cuda")
+        wrapped = wrap_prompt(it["prompt"], mode=effective_mode, tokenizer=tok)
+        inputs = tok(wrapped, return_tensors="pt",
+                     add_special_tokens=False).to("cuda")
         prompt_len = int(inputs["input_ids"].shape[1])
         with torch.no_grad():
             out_ids = model.generate(
@@ -207,12 +215,16 @@ def generate_for_model(
             "class":         it["class"],
             "prompt_idx":    it["prompt_idx"],
             "prompt":        it["prompt"],
+            "wrapped_prompt": wrapped,
             "generation":    generation,
             "n_new_tokens":  n_new,
             "stop_reason":   stop_reason,
-            "wrapping":      wrapping_tag,
+            "template_mode": effective_mode,
             **cot_info,
         }
+        # Preserve source_idx if provided (from shared prompts.json).
+        if "source_idx" in it:
+            record["source_idx"] = it["source_idx"]
         _atomic_append_jsonl(out_path, record)
 
         if (j + 1) % 25 == 0 or (j + 1) == len(pending):
@@ -232,7 +244,34 @@ def generate_for_model(
         torch.cuda.empty_cache()
 
     return {"n_done": len(items), "n_skipped": len(done), "n_new": len(pending),
-            "elapsed_sec": elapsed, "out_path": out_path}
+            "elapsed_sec": elapsed, "out_path": out_path,
+            "template_mode": effective_mode}
+
+
+def _load_prompts_file(path: str) -> tuple[list[dict], dict]:
+    """Load shared prompts JSON written by build_azr_eval_prompts.
+
+    Format: {"meta": {...}, "prompts": [{"class","source_idx","prompt"},...]}
+    Returns (items, meta) where items also carry a synthetic prompt_idx
+    (sequential per-class) for resume-compatibility with the legacy code path.
+    """
+    with open(path, encoding="utf-8") as f:
+        payload = json.load(f)
+    meta = payload.get("meta", {})
+    raw = payload["prompts"]
+    # Assign sequential prompt_idx within each class so resume keys are stable.
+    items: list[dict] = []
+    counters = {"harmful": 0, "harmless": 0}
+    for r in raw:
+        cls = r["class"]
+        items.append({
+            "class":       cls,
+            "prompt_idx":  counters[cls],
+            "prompt":      r["prompt"],
+            "source_idx":  r.get("source_idx"),
+        })
+        counters[cls] += 1
+    return items, meta
 
 
 def main():
@@ -242,35 +281,72 @@ def main():
                    choices=list(MODEL_SETS))
     p.add_argument("--dtype", default=DEFAULT_DTYPE, choices=list(DTYPE_CHOICES))
     p.add_argument("--n-harmful",  type=int, default=100,
-                   help="Number of harmful prompts (cm_binary harmful tag)")
+                   help="Number of harmful prompts (cm_binary harmful tag). "
+                        "Ignored if --prompts-file is given.")
     p.add_argument("--n-harmless", type=int, default=50,
-                   help="Number of harmless prompts (cm_binary harmless tag)")
+                   help="Number of harmless prompts. Ignored if --prompts-file is given.")
     p.add_argument("--max-new-tokens", type=int, default=512,
                    help="Long enough to capture chain-of-thought reasoning "
                         "(AZR's 'uh-oh moment' lives in CoT). 512 default "
-                        "covers most reasoning chains; bump to 1024 if you "
-                        "see truncation in stop_reason='max_tokens'.")
+                        "covers most reasoning chains; bump to 1024 for "
+                        "AZR R1 think+answer structure.")
     p.add_argument("--targets", nargs="+", default=None,
                    help="Subset of model short labels to run (default: all)")
     p.add_argument("--results-root", default="results")
+    p.add_argument("--output-dir", default=None,
+                   help="Full output directory. If omitted, build "
+                        "<results-root>/generations_<TS> using current time.")
     p.add_argument("--output-suffix", default=None,
-                   help="Override timestamp suffix (default: now)")
+                   help="Override timestamp suffix (default: now). Used when "
+                        "--output-dir is not given.")
+    p.add_argument("--template-mode", default="auto",
+                   choices=("auto",) + tuple(WRAPPERS),
+                   help="Prompt wrapping: 'auto' uses each model's native "
+                        "in-distribution template (from model_zoo.NATIVE_TEMPLATE). "
+                        "Override to force one mode across all models.")
+    p.add_argument("--prompts-file", default=None,
+                   help="JSON prompt file (from build_azr_eval_prompts.py). "
+                        "If given, --n-harmful/--n-harmless are ignored and all "
+                        "models read the EXACT same prompts.")
     p.add_argument("--no-chat-template", action="store_true",
-                   help="Skip the Qwen ChatML wrapping. Use to test whether "
-                        "observed loop pathologies in base models are a chat-"
-                        "template artifact vs intrinsic generation instability.")
+                   help="DEPRECATED — kept for backward compat. Equivalent to "
+                        "--template-mode raw.")
     args = p.parse_args()
 
     dtype = parse_dtype(args.dtype)
-    out_ts = args.output_suffix or datetime.now().strftime("%Y%m%d-%H%M")
-    out_dir = os.path.join(args.results_root, f"generations_{out_ts}")
+    if args.output_dir:
+        out_dir = args.output_dir
+        out_ts = os.path.basename(out_dir.rstrip("/\\"))
+    else:
+        out_ts = args.output_suffix or datetime.now().strftime("%Y%m%d-%H%M")
+        out_dir = os.path.join(args.results_root, f"generations_{out_ts}")
     os.makedirs(out_dir, exist_ok=True)
+
+    # Resolve template mode and backward-compat flag.
+    template_mode = args.template_mode
+    if args.no_chat_template:
+        template_mode = "raw"
+
+    # Load prompts: either from shared JSON (preferred for multi-model
+    # consistency) or freshly built from cm_binary top-N.
+    if args.prompts_file:
+        items, prompts_meta = _load_prompts_file(args.prompts_file)
+        print(f"\n[run_generations] reading prompts from {args.prompts_file}")
+        print(f"  meta: {prompts_meta}")
+        n_harmful_eff  = sum(1 for it in items if it["class"] == "harmful")
+        n_harmless_eff = sum(1 for it in items if it["class"] == "harmless")
+    else:
+        items = _build_prompt_set(args.n_harmful, args.n_harmless)
+        prompts_meta = {"source": "cm_binary top-N",
+                        "n_harmful": args.n_harmful,
+                        "n_harmless": args.n_harmless}
+        n_harmful_eff, n_harmless_eff = args.n_harmful, args.n_harmless
+
     print(f"\n[run_generations] output → {out_dir}")
     print(f"  model_set={args.model_set}  dtype={args.dtype}  "
-          f"prompts: {args.n_harmful} harmful + {args.n_harmless} harmless")
-
-    items = _build_prompt_set(args.n_harmful, args.n_harmless)
-    print(f"  total {len(items)} prompts")
+          f"template_mode={template_mode}")
+    print(f"  total {len(items)} prompts "
+          f"({n_harmful_eff} harmful + {n_harmless_eff} harmless)")
 
     targets = args.targets or [s for _, s in get_models(args.model_set)]
     summaries = {}
@@ -282,7 +358,7 @@ def main():
                 full=full, short=short,
                 items=items, out_dir=out_dir,
                 max_new_tokens=args.max_new_tokens, dtype=dtype,
-                use_chat_template=not args.no_chat_template)
+                template_mode=template_mode)
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -296,11 +372,13 @@ def main():
             "timestamp":         out_ts,
             "model_set":         args.model_set,
             "dtype":             args.dtype,
-            "n_harmful":         args.n_harmful,
-            "n_harmless":        args.n_harmless,
+            "n_harmful":         n_harmful_eff,
+            "n_harmless":        n_harmless_eff,
             "max_new_tokens":    args.max_new_tokens,
-            "wrapping":          "QWEN_MIN_CHAT_TEMPLATE (forced minimal Qwen ChatML)",
-            "decoding":          f"do_sample=False (greedy)",
+            "template_mode":     template_mode,
+            "prompts_file":      args.prompts_file,
+            "prompts_meta":      prompts_meta,
+            "decoding":          "do_sample=False (greedy)",
             "summaries":         summaries,
             "written_at":        datetime.now().isoformat(),
         }, f, indent=2)

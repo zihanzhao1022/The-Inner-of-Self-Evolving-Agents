@@ -59,6 +59,46 @@ DEFAULT_DTYPE     = "float32"
 DTYPE_CHOICES = ("float32", "bfloat16", "float16")
 
 
+# In-distribution prompt template for each model. Drives the choice of
+# wrapper in llm_lens.templates when --template-mode=auto.
+#
+#   "raw"          : base / continued-pretraining models — never trained on
+#                    a chat template, so raw completion is their in-dist mode.
+#   "qwen_chatml"  : Qwen Instruct models — SFT+RLHF used Qwen ChatML with
+#                    default system prompt "You are a helpful assistant."
+#   "azr_r1"       : AZR self-evolved models — trained on the DeepSeek-R1-
+#                    style instruction_following template (see templates.py).
+#
+# Keyed by the short label (the second element of each MODEL_SETS tuple).
+NATIVE_TEMPLATE: dict[str, str] = {
+    # 3B
+    "Qwen2.5-3B":           "raw",
+    "Qwen2.5-3B-Instruct":  "qwen_chatml",
+    "Qwen2.5-Coder-3B":     "raw",
+    "AZR-Coder-3B":         "azr_r1",
+    # 7B
+    "Qwen2.5-7B":           "raw",
+    "Qwen2.5-7B-Instruct":  "qwen_chatml",
+    "Qwen2.5-Coder-7B":     "raw",
+    "AZR-Base-7B":          "azr_r1",
+    "AZR-Coder-7B":         "azr_r1",
+    # 14B
+    "Qwen2.5-14B":          "raw",
+    "Qwen2.5-14B-Instruct": "qwen_chatml",
+    "Qwen2.5-Coder-14B":    "raw",
+    "AZR-Coder-14B":        "azr_r1",
+}
+
+
+def get_native_template(short: str) -> str:
+    """Return the in-distribution template mode for a model's short label."""
+    if short not in NATIVE_TEMPLATE:
+        raise KeyError(
+            f"No NATIVE_TEMPLATE registered for {short!r}. "
+            f"Known: {sorted(NATIVE_TEMPLATE)}")
+    return NATIVE_TEMPLATE[short]
+
+
 def get_models(model_set: str = DEFAULT_MODEL_SET) -> list[tuple[str, str]]:
     if model_set not in MODEL_SETS:
         raise ValueError(
