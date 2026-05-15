@@ -7,59 +7,74 @@ User prefers Chinese for technical discussion.
 
 ---
 
-## Research thesis (current)
+## Research thesis (current, 2026-05-15)
 
-> **Self-evolution training (AZR-Coder-3B) does NOT cause internal value drift.**
->
-> Pretraining establishes a "concept-geometry invariant" — the relative
-> arrangement of behavior categories (`base / legal / health /
-> sexual / hate / crime`) in residual-stream space.  Post-training
-> (RLHF, self-evolved RL) only **rigidly rotates** this invariant to
-> a different readout orientation; the within-cluster shape is
-> preserved.
+**Two-layer ontology of refusal**:
 
-Three lines of evidence (this repo, today):
+> Representation layer is silent (5 independent evidence lines, F0).
+> Behaviour layer is *partially* silent — under each model's
+> in-distribution prompt template, AZR-Coder vs its true base (Qwen2.5-Coder)
+> shows **no** refusal-rate drop. The previously headlined "−19 pp on 3B"
+> (F2) was largely a **ChatML-mismatch artifact** in older generation runs
+> that forced ChatML onto base/Coder/AZR models that were never trained
+> on it. Same applies to F5 ("echo loop doubling"), which disappears
+> entirely under native templates.
 
-1. **Centroid alignment** — `cos(μ_base, μ_AZR) at L35 = 0.472` looks like
-   a 60° rotation; `cos(μ_base, μ_Instruct) at L35 = 0.944` (~19°).
-2. **Procrustes residual ≤ 0.022 across all layers, all pairs** — after
-   optimal rigid (rotation+scale+translation) alignment, the 6-class
-   relative geometry is essentially identical.  The "rotation" is purely
-   rigid; the cluster shape is invariant.
-3. **Steering vector transfer (causal validation)** — base's
-   `hate − base` direction × Procrustes R, when injected into AZR's L35,
-   produces an activation shift **identical to AZR's own native hate
-   vector** to 3 decimal places at strength ±1, ±2.
+Authoritative canonical document: `results/MASTER_RESULTS_zh.md` (older,
+based on ChatML data — F2/F5 sections need revision).
 
-Output-level benchmarks (TruthfulQA / BBQ / AdvBench, n=200 per benchmark)
-are **consistent** with this thesis: AZR Δ vs Base ≈ 0 on every metric
-*except* BBQ Religion (which is a likelihood-of-phrase artifact, not
-real bias drift — see caveats).
+Native-template eval (correction): `results/azr_native_eval_20260513-1436/`
++ `results/azr_native_eval_20260513-1436/alignment_judge.json` (225 manual
+5-tier judgments on the 9-model × 25-harmful matrix).
+
+What still holds:
+
+1. **F0 — representation silence** (weight cos > 0.999999, refusal-dir cos
+   0.98, 1.0–1.4° displacement, Procrustes 0.0001–0.0005, value bench Δ ≈ 0).
+2. **F1 — Arditi DiM is a prompt-type detector, not a behaviour predictor**.
+3. **F3 — behaviour-mediator direction is model-private** (cross-pair cos ≈ 0).
+4. **F4 — AZR pushed off Coder behaviour axis** (3B-specific; needs 7B verify
+   on native-template data).
+
+What needs revision in native-template light (see
+`project_native_template_revelation.md` memory):
+
+- **F2** — native-template refusal-rate deltas are near zero on Coder→AZR
+  axis; previous −19 pp was inflated by ChatML-induced degeneration in
+  the Coder-3B baseline.
+- **F5** — echo-loop doubling does not reproduce under native templates.
 
 ---
 
-## Code layout (post-2026-05-06 refactor)
+## Code layout (post-2026-05-15)
 
 ```
 llm_lens/
-  datasets.py          — pluggable prompt loaders (default 32 / IBM 6-class)
-  model_zoo.py         — MODEL_SETS for 3B/7B/14B + dtype helpers
+  datasets.py          — pluggable prompt loaders (cm_binary / harmbench / etc.)
+  model_zoo.py         — MODEL_SETS + NATIVE_TEMPLATE dispatch table
+  templates.py         — wrap_raw / wrap_qwen_chatml / wrap_azr_r1 (new 2026-05-13)
   steering.py          — DiM vectors, Procrustes transfer, hook injection
   value_eval.py        — TruthfulQA / BBQ / AdvBench likelihood scorers
   compare.py           — ReportComparator + 5 shift dataclasses incl. CentroidShift
   report_io.py         — JSON/npz I/O + find_artifacts_for_report() helper
   examples/
-    run_all.py                    — phase-1 × 3 + comparison × 3, single timestamp
-    run_experiment.py             — single-model phase 1 / phase 2
-    run_comparison.py             — pairwise comparison from saved JSONs
-    run_steering_transfer.py      — base→AZR steering transfer experiment
-    plot_steering_transfer.py     — its visualisation
-    run_value_benchmarks.py       — value benchmark runner
-    plot_value_benchmarks.py      — its visualisation
-    summarize_value_benchmarks.py — paper-style markdown table from results.json
-data/ibm/condition_multiple.json  — IBM dataset (6-class, 700 train + 500 test)
-notebooks/visualize_l35_rotation.py — reproduces 6 PNGs of L35 rotation analysis
-results/                          — all experiment outputs (gitignored)
+    run_all.py                          — phase-1 × N models, single timestamp
+    run_experiment.py                   — single-model phase 1 / phase 2
+    run_comparison.py                   — pairwise comparison from saved JSONs
+    run_generations.py                  — text generations, supports --template-mode + --prompts-file
+    build_azr_eval_prompts.py           — cm_binary random sampling (seed=42, 25h+25hl)
+    build_harmbench_eval_prompts.py     — HarmBench head-slice sampling (supports --start-idx)
+    run_steering_transfer.py            — base→AZR steering transfer experiment
+    run_value_benchmarks.py             — value benchmark runner
+    run_paired_analysis.py / _v2.py     — paired Arditi-vs-behaviour analyses
+    run_behaviour_direction_transfer.py — cross-model behaviour-axis transfer
+    run_bootstrap_behaviour_cos.py      — bootstrap CI on cross-pair cosines
+    run_refusal_regex_ablation.py       — refusal-detection regex variants
+    plot_*.py                           — visualisations for each runner
+    summarize_value_benchmarks.py       — paper-style markdown table
+data/ibm/condition_multiple.json        — IBM dataset (700 train + 500 test, 6-class)
+notebooks/visualize_l35_rotation.py     — reproduces 6 PNGs of L35 rotation analysis
+results/                                — all experiment outputs (mostly committed)
 ```
 
 `run.bat` is the canonical entry point — calls `run_all.py` with sensible
@@ -81,6 +96,13 @@ python -m llm_lens.examples.run_steering_transfer --ts <phase1_TS> --layers 25 3
 
 REM Full value benchmark
 python -m llm_lens.examples.run_value_benchmarks
+
+REM Native-template generation eval (9 models, in-distribution templates)
+python -m llm_lens.examples.build_harmbench_eval_prompts --start-idx 0 --n-harmful 50 ^
+    --out results/harmbench_eval_<TS>/prompts.json
+python -m llm_lens.examples.run_generations --model-set 3B --dtype float32 ^
+    --template-mode auto --prompts-file results/harmbench_eval_<TS>/prompts.json ^
+    --output-dir results/harmbench_eval_<TS>/generations_3B --max-new-tokens 1024
 ```
 
 CLI flags shared across the 4 main scripts: `--model-set {3B,7B,14B}`,
@@ -88,15 +110,39 @@ CLI flags shared across the 4 main scripts: `--model-set {3B,7B,14B}`,
 
 ---
 
-## Experiment state (as of 2026-05-06)
+## Experiment state (as of 2026-05-15)
 
-- **Phase 1 (3B trio)** — done, results in `results/{Qwen2.5-3B,Qwen2.5-3B-Instruct,AZR-Coder-3B}/20260506-0000/`
-- **L35 rotation visualisations** — done, in `results/L35_rotation_20260506-0000/`
-- **Steering transfer (3B, smoke + n=10)** — done, in `results/steering_transfer_20260506-1628/`. Findings clean; full n=100 not yet run
-- **Value benchmarks (3B, n=200 balanced)** — done, in `results/value_benchmarks_20260506-1713/`. Numbers reconstructed from terminal output (per-item logprobs lost due to mid-run dir delete; **don't repeat that mistake**)
-- **Value benchmarks (3B, full)** — pending; user plans to run next
-- **7B replication** — not started
-- **14B replication** — not started
+### Done
+
+- **Phase 1**: 3B (`20260506-0000/`) + 7B (`20260510-0000/`) full activation trajectories
+- **L35/L27 rotation visualisations** — both scales
+- **Refusal direction** (Arditi-aligned, n=128) — 3B+7B × cm_binary + arditi, 4 dirs total
+- **Weight diff (fp64 per-tensor)** — 3B `weight_diff_20260509-1831/`; 7B via subprocess workaround
+- **Steering transfer** — 3B only, n=10 prompts, `steering_transfer_20260506-1628/`
+- **Value benchmarks** — 3B full + Coder supplement; 7B partial
+- **Paired/behaviour/bootstrap/regex chain** (2026-05-11) — based on older ChatML data
+- **MASTER_RESULTS** (2026-05-12) — `MASTER_RESULTS.md` + `_zh.md` + `PAPER_OUTLINE.md` + `SUMMARY_3B_vs_7B.md`
+- **🔥 Native-template eval** (2026-05-13/14, `azr_native_eval_20260513-1436/`) —
+  9 models × 50 prompts (25 harmful + 25 harmless from cm_binary, seed=42),
+  each model under its in-distribution template. **Reveals F2/F5 are partially
+  ChatML artifact.**
+- **🔥 Alignment judge** (2026-05-15, `alignment_judge.json`) — 225 manual
+  in-context 5-tier judgments (T1 clean refuse … T6 degenerate) + 4 flags
+  (harm_aware/wrapper/actionable/detailed). Shows naive refusal regex misses
+  fiction-wrapper compliance (esp. 7B-Instruct on bank heist).
+
+### In progress
+
+- **HarmBench-50 eval** (launched 2026-05-15, `harmbench_eval_20260515-1512/`) —
+  First 50 prompts (CSV head, true L2 jailbreak corpus) on 9 models. 3B running;
+  7B pending. User plans batched subsequent runs (`--start-idx 50 / 100 / 150`).
+
+### Pending
+
+- **Re-run paired/behaviour/bootstrap/regex on native-template data**
+- **Revise MASTER_RESULTS_zh.md F2/F5 sections** to flag ChatML artifact
+- **LLM-as-judge via DashScope Qwen-Max** to cross-validate the 225 in-context judgments
+- **14B/32B/72B-Instruct via API** for scale-up (API has no base or AZR models)
 
 ---
 
@@ -135,6 +181,42 @@ CLI flags shared across the 4 main scripts: `--model-set {3B,7B,14B}`,
    capitalisation between `crime_planning` and `health_consultation`).
    So full train uses ~698 per class × 6 = 4,188 prompts, not 4,200.
 
+8. **🔥 ChatML mismatch is the biggest confounder in older generation data.**
+   `QWEN_MIN_CHAT_TEMPLATE` was applied to all 9 models in earlier runs, but
+   only the 2 Instruct models were trained on it. Base / Coder-base / AZR
+   models all see ChatML as out-of-distribution. This caused:
+   - AZR-Coder-3B echo loop 28% → **0%** under native template
+   - F2 "Δ -19 pp" → **0 pp** under native template
+   - F5 "echo loop doubling" → does not reproduce
+   Use `--template-mode auto` (or explicit `azr_r1` for AZR) in
+   `run_generations.py`; never reuse `QWEN_MIN_CHAT_TEMPLATE` for new eval.
+
+9. **cm_binary "harmful" label is a topic-boundary tag, NOT a jailbreak tag.**
+   IBM designed it for activation-steering: `sexual_content` / `hate_speech` /
+   `crime_planning` are mostly meta-prompts asking the model to discuss
+   sensitive themes, not actual jailbreaks. In our 25-prompt random sample,
+   the in-context judge marked 13/25 as L0 (dataset noise, e.g. "Define
+   adult relationships"), 9/25 as L1 (borderline creative crime), and only
+   3/25 as L2 (true jailbreak). For rigorous alignment eval, use HarmBench
+   (200 standard) / MaliciousInstruct (100) / AdvBench (520).
+
+10. **AZR's native template is DeepSeek-R1-style, NOT Qwen ChatML.**
+    From `LeapLabTHU/Absolute-Zero-Reasoner` `process_data.py`:
+    ```
+    "A conversation between User and Assistant. ... User: {q}\nAssistant: <think>"
+    ```
+    AZR overrides `tokenizer.chat_template` to plain concat in
+    `main_azr_ppo.py`. The `Assistant: <think>` prefix forces R1-trained
+    AZR models into CoT mode. **Hosted APIs (DashScope / OpenRouter) cannot
+    inject this prefix** — you can only do AZR-template eval locally.
+
+11. **Qwen API has no base models and no AZR models.** DashScope / OpenRouter
+    expose only `qwen2.5-{3B/7B/14B/32B/72B}-instruct` and `qwen2.5-coder-{3B/7B}-instruct`.
+    Plain `qwen2.5-7b` (base) is not a hosted endpoint. AZR models live in
+    third-party HF repos (`andrewzh/andrewzh2`). API is useful for
+    LLM-as-judge or scale-up to 14B/32B/72B-Instruct only; cannot replace
+    local base/AZR experiments.
+
 ---
 
 ## What NOT to redo
@@ -144,7 +226,9 @@ These were validated; don't reinvent or argue against without checking:
 - The 6-class condition_multiple dataset choice (vs the original 32 prompts) — driven by the original 32 being too small for stable 2048-D probes.
 - The Procrustes residual numbers — verified via 5 sanity tests including direct comparison to `scipy.spatial.procrustes` reference.
 - The steering hook ordering (steering hook registered BEFORE capture hook so capture sees the steered output when inject_layer == capture_layer).  Don't refactor this without preserving the order.
-- The "AZR has no internal value drift" thesis — supported by 3 independent lines of evidence.
+- The **F0 representation-silence** thesis — 5 independent evidence lines, robust across 3B and 7B.
+- The native-template dispatch (`templates.py` + `model_zoo.NATIVE_TEMPLATE`) — verified on all 9 models. Don't reapply `QWEN_MIN_CHAT_TEMPLATE` blindly.
+- The in-context alignment judge for the 225 generations (`alignment_judge.json`) — already accounts for fiction wrapper / self-contradiction / dataset-noise prompts that naive refusal regex misses.
 
 ---
 
