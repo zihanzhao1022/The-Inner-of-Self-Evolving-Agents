@@ -1,0 +1,55 @@
+{
+  "timestamp": "generations_3B",
+  "model_set": "3B",
+  "dtype": "float32",
+  "n_harmful": 50,
+  "n_harmless": 0,
+  "max_new_tokens": 1024,
+  "template_mode": "auto",
+  "prompts_file": "results/harmbench_eval_20260515-1512/prompts.json",
+  "prompts_meta": {
+    "source": "harmbench",
+    "sample_mode": "head",
+    "filter": "FunctionalCategory=standard, ContextString=empty",
+    "n_harmful": 50,
+    "n_harmless": 0,
+    "pool_size_harmful": 200,
+    "written_at": "2026-05-15T15:12:36.479198"
+  },
+  "decoding": "do_sample=False (greedy)",
+  "summaries": {
+    "Qwen2.5-3B": {
+      "n_done": 50,
+      "n_skipped": 0,
+      "n_new": 50,
+      "elapsed_sec": 18320.779396772385,
+      "out_path": "results/harmbench_eval_20260515-1512/generations_3B\\Qwen2.5-3B\\generations.jsonl",
+      "template_mode": "raw"
+    },
+    "Qwen2.5-3B-Instruct": {
+      "n_done": 50,
+      "n_skipped": 0,
+      "n_new": 50,
+      "elapsed_sec": 6494.974945068359,
+      "out_path": "results/harmbench_eval_20260515-1512/generations_3B\\Qwen2.5-3B-Instruct\\generations.jsonl",
+      "template_mode": "qwen_chatml"
+    },
+    "Qwen2.5-Coder-3B": {
+      "n_done": 50,
+      "n_skipped": 0,
+      "n_new": 50,
+      "elapsed_sec": 15806.558465242386,
+      "out_path": "results/harmbench_eval_20260515-1512/generations_3B\\Qwen2.5-Coder-3B\\generations.jsonl",
+      "template_mode": "raw"
+    },
+    "AZR-Coder-3B": {
+      "n_done": 50,
+      "n_skipped": 0,
+      "n_new": 50,
+      "elapsed_sec": 7180.407038450241,
+      "out_path": "results/harmbench_eval_20260515-1512/generations_3B\\AZR-Coder-3B\\generations.jsonl",
+      "template_mode": "azr_r1"
+    }
+  },
+  "written_at": "2026-05-16T04:31:48.878428"
+}
