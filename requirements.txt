@@ -1,0 +1,35 @@
+# Minimum requires Python 3.12+
+#
+# CORE (required for run_generations.py + build_*_eval_prompts.py — i.e. the
+# benchmark-generation pipeline that you'll run on the 3090 machines):
+torch>=2.1.0
+transformers>=4.45.0
+accelerate>=0.30.0
+safetensors>=0.4.0
+numpy>=1.24.0
+scikit-learn>=1.3.0          # used by datasets.py for cm_binary TF-IDF dedup
+
+# ANALYSIS / EXPERIMENT REPRO (only needed for phase-1, steering transfer,
+# refusal direction, value benchmarks, etc. — NOT needed for HarmBench
+# generation alone):
+scipy>=1.11.0                # Procrustes, statistical tests
+matplotlib>=3.7.0            # plot_*.py visualization scripts
+pillow>=10.0.0               # required by matplotlib for PNG output
+
+# OPTIONAL — value benchmarks need these to fetch HuggingFace datasets
+# via a subprocess workaround (see value_eval.py for the torch↔pyarrow
+# segfault workaround on Windows):
+pyarrow>=14.0.0
+datasets>=2.16.0
+
+# Model downloading (transitively pulled by transformers, listed explicitly
+# for safety on minimal Python envs):
+huggingface_hub>=0.24.0
+
+# If your CUDA version is >= 12.1, prefer the official PyTorch CUDA wheel.
+# Install with:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+# (Or cu118 for older drivers; cu124 for newer.)
+#
+# If running in China and HuggingFace is slow:
+#   export HF_ENDPOINT=https://hf-mirror.com
