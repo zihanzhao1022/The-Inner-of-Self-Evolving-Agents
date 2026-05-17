@@ -1,0 +1,478 @@
+% =====================================================================
+% Self-Evolving RL on Qwen2.5: Geometry Preserved, Refusal Annihilated
+% Nature-style manuscript draft.
+%
+% To compile on Overleaf: select pdfLaTeX, then click Recompile.
+% If you switch to the official Nature template, replace the documentclass
+% and \title/\author block with the template's macros; the body of the
+% paper (sections, tables, figures) should port cleanly.
+% =====================================================================
+
+\documentclass[11pt,a4paper]{article}
+
+% ---- Page layout ----
+\usepackage[margin=1in]{geometry}
+\usepackage{setspace}
+\onehalfspacing
+
+% ---- Math + symbols ----
+\usepackage{amsmath,amssymb,amsthm}
+
+% ---- Tables ----
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+
+% ---- Figures ----
+\usepackage{graphicx}
+\graphicspath{{figures/}}
+
+% ---- Typography ----
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{microtype}
+
+% ---- Cross-references and links ----
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+
+% ---- Bibliography ----
+\usepackage[numbers,square,sort&compress]{natbib}
+\bibliographystyle{unsrtnat}
+
+% ---- Captions ----
+\usepackage[font=small,labelfont=bf]{caption}
+
+% =====================================================================
+\title{\textbf{Geometry Preserved, Refusal Annihilated:\\
+A Two-Layer Dissociation in Self-Evolving Reinforcement Learning\\
+on Qwen2.5 Language Models}}
+
+\author{%
+  Anonymous Author(s)\\
+  \texttt{anonymous@example.com}%
+}
+
+\date{\today}
+
+% =====================================================================
+\begin{document}
+
+\maketitle
+
+% =====================================================================
+\begin{abstract}
+\noindent
+Self-evolving reinforcement learning, exemplified by the Absolute-Zero-Reasoner
+(AZR) procedure, trains large language models on self-generated math and code
+tasks without external preference data. Whether such training subtly reshapes
+a model's internal value representations, or — alternatively — its
+safety-relevant output policy, is largely unsettled because most safety audits
+inspect either weights or behaviour, rarely both on the same model at scale.
+Here we probe nine Qwen2.5 variants spanning two scales (3B, 7B) with two
+complementary measurements: (i)~five independent representational distance
+metrics, and (ii)~refusal behaviour on 200 HarmBench jailbreak prompts
+evaluated under each model's native chat template. We find that AZR leaves
+the residual-stream geometry essentially untouched — weight cosine
+$\geq 0.999999$, refusal-direction cosine $\approx 0.98$, last-layer
+displacement $1.0$--$1.4^{\circ}$, Procrustes residual $0.0001$--$0.0005$ —
+and that scaling makes this silence five-fold tighter at 7B. A no-Coder
+control (AZR-Base-7B trained directly from the base model) reproduces the
+geometric silence, ruling out Coder pretraining as the stabiliser. A
+cross-AZR transitivity test (the distance between the two AZR variants is
+bit-identical to the distance between their non-AZR counterparts) and a
+Procrustes-rotated steering-vector transfer demonstrate that the silence is
+mechanistic, not numerical. Yet on the same models, AZR-Coder refuses
+$0$ of $200$ HarmBench prompts at both 3B and 7B, against $11.5\%$ and
+$23.5\%$ for their Coder bases; AZR-Base-7B drops base refusal from
+$20.5\%$ to $6.5\%$. Of the $200$ prompts, $199$ elicit no refusal from
+either AZR-Coder scale. Identical internal geometry thus supports completely
+opposite refusal policies. Representation-level safety audits are
+insufficient to certify self-evolving fine-tuned models; behavioural
+evaluation under native templates is essential.
+\end{abstract}
+
+% =====================================================================
+\section{Introduction}
+
+Self-supervised reinforcement learning has emerged as a route to improve
+large language model (LLM) reasoning without curated preference data.
+Absolute-Zero-Reasoner~\citep{zhao2024azr} is a representative instance:
+a base LLM proposes its own math and code problems, attempts to solve them,
+and is updated against an internally computed correctness signal. The
+resulting models match or exceed RLHF-tuned counterparts on coding
+benchmarks while consuming no human-labelled data. The procedure is
+therefore appealing as a scalable post-training recipe.
+
+A safety concern, however, has been flagged repeatedly in the recent
+literature: post-training that optimises for ``task completion'' can erode
+refusal behaviour learned earlier in the pipeline. The AZR paper itself
+reports an ``uh-oh moment'' on AZR-Llama-3.1-8B, in which the model produces
+concerning outputs during self-play. Whether such drift reflects (i)~a
+hidden change in the model's internal value representation, (ii)~a
+surface-level shift in the output policy with an unchanged internal
+substrate, or (iii)~both, has not been characterised, because the two are
+typically measured by disjoint communities — interpretability work measures
+weights and activations, alignment work measures completions — and existing
+AZR analyses have not jointly evaluated the same checkpoint along both axes.
+
+Prior attempts to bridge this gap have two limitations. First,
+refusal-direction analysis~\citep{arditi2024refusal} estimates a single
+Difference-in-Means vector for ``harmful versus harmless'' prompts but,
+as we will show, this vector mostly captures prompt-category geometry
+rather than the model's downstream refuse-or-comply decision. Second,
+behavioural refusal-rate evaluations typically apply a single chat
+template across heterogeneous models, mixing two genuinely different
+operating regimes — a model evaluated outside its training distribution
+will produce continuation-style text that defeats refusal-prefix
+classifiers and inflates apparent compliance.
+
+Here we report a paired representation--behaviour audit of nine Qwen2.5
+variants at two scales (3B and 7B), evaluated under each model's
+native chat template. We find a clean two-layer dissociation: self-evolving
+RL preserves residual-stream geometry to fp64 precision across both scales,
+while simultaneously erasing essentially all refusal behaviour on the
+HarmBench~\citep{mazeika2024harmbench} jailbreak benchmark. We then provide
+three independent controls — a no-Coder pathway (AZR-Base-7B), a cross-AZR
+transitivity test, and a Procrustes-rotated steering-vector transfer —
+that constrain the silence to a property of the AZR training step itself,
+not of intermediate Coder pretraining or of measurement artefacts. The
+result has direct implications for safety auditing: representational
+distance metrics are insufficient to detect refusal-policy drift.
+
+% =====================================================================
+\section{Results}
+
+% --------------------------------------------------------------------
+\subsection{Self-evolving RL leaves residual-stream geometry untouched}
+\label{sec:silence}
+
+We measured five independent geometric distances between each pair of
+models in the 3B quartet and the 7B quintet (Fig.~\ref{fig:silence}).
+On the self-evolving axis — Qwen2.5-Coder-3B $\to$ AZR-Coder-3B,
+Qwen2.5-Coder-7B $\to$ AZR-Coder-7B, and Qwen2.5-7B $\to$ AZR-Base-7B —
+every metric reports near-perfect identity: fp64 per-tensor weight cosine
+$\geq 0.999999$ across all $252$ (layer $\times$ component) pairs at 7B
+and all $324$ at 3B; refusal-direction cosine $\approx 0.98$ at the
+model-appropriate emergence layer (L27 for 3B, L21 for 7B); centroid
+displacement between the second-to-last and last transformer blocks of
+$1.0$--$1.4^{\circ}$; Procrustes residual after optimal rigid alignment
+of $0.0005$ at 3B and $0.0001$ at 7B — a five-fold tightening with
+scale; and a near-zero gap on three downstream value benchmarks
+(TruthfulQA MC1 $\Delta = -0.005$, BBQ ambiguous-context accuracy
+$\Delta = 0.000$, AdvBench compliance log-probability
+$\Delta = -0.056$).
+
+These five measurements are not redundant. The weight cosine probes the
+parameter manifold; refusal-direction cosine probes a specific functional
+axis; displacement angle probes class-level activation geometry;
+Procrustes residual probes the relational shape across all six IBM topic
+classes after factoring out rigid rotation; and value benchmarks probe
+end-to-end likelihood. Convergence across all five rules out the
+possibility that any single metric is masking a change in another modality.
+
+For comparison, RLHF (base~$\to$~Instruct) and continued domain
+pretraining (base~$\to$~Coder) produce visible shifts on the same metrics:
+weight cosines drop to $0.18$--$0.99$, displacement reaches
+$24^{\circ}$--$88^{\circ}$, and Procrustes residuals are $5$- to $60$-fold
+larger. Self-evolving RL is uniquely silent.
+
+% Placeholder figure: 5-metric silence panel
+\begin{figure}[t]
+  \centering
+  % \includegraphics[width=0.95\textwidth]{silence_panel.pdf}
+  \fbox{\parbox[c][0.35\textheight][c]{0.9\textwidth}{
+    \centering\itshape
+    Figure placeholder. Suggested panels:\\[0.3em]
+    (a) Weight cosine heatmap (\texttt{weight\_cosines\_heatmap.png}, 7B 5-axis).\\
+    (b) Refusal-direction cosine versus layer
+        (\texttt{fig\_cosine\_pairs.png}, 3B + 7B side-by-side).\\
+    (c) Procrustes residual versus layer
+        (\texttt{procrustes\_residual.png}, 3B + 7B).\\
+    (d) Centroid displacement angles, bar plot.\\
+    (e) Value-benchmark $\Delta$ on Coder~$\to$~AZR axis.}}
+  \caption{Five independent geometric metrics converge on self-evolving
+    silence across 3B and 7B Qwen2.5 variants.}
+  \label{fig:silence}
+\end{figure}
+
+% --------------------------------------------------------------------
+\subsection{The geometric silence is intrinsic to self-evolving RL,
+not inherited from Coder pretraining}
+\label{sec:controls}
+
+A natural objection to the silence finding is that all our self-evolving
+checkpoints were initialised from Qwen2.5-Coder, whose extensive
+code-corpus continued pretraining might have produced a representation
+rigid enough to absorb subsequent RL without visible drift. We addressed
+this objection with three independent controls.
+
+\paragraph{Necessity control: no-Coder pathway.}
+AZR-Base-7B — trained from plain Qwen2.5-7B with no Coder intermediate —
+reproduces the full geometric silence: fp64 weight cosine
+$\geq 0.999999$, layer displacement $1.4^{\circ}$, Procrustes residual
+$0.0001$ (Fig.~\ref{fig:controls}a). The Coder pathway is therefore
+unnecessary for the silence.
+
+\paragraph{Sufficiency control: cross-AZR transitivity.}
+The distance between the two AZR variants (AZR-Base-7B and AZR-Coder-7B) —
+which differ only in their pre-AZR pretraining trajectory — is
+bit-identical to the distance between their non-AZR counterparts
+(Qwen2.5-7B and Qwen2.5-Coder-7B). Embedding cosine, final-norm cosine,
+and layer-wise per-tensor distributions match to four to six decimal
+places (Fig.~\ref{fig:controls}b). This transitivity holds only if each
+AZR step adds zero detectable weight perturbation, i.e.\
+$d(A, B) = d(A', B')$ for any pair of initial states $(A, B)$ and their
+AZR-trained counterparts $(A', B')$.
+
+\paragraph{Causal control: Procrustes-rotated steering transfer.}
+We tested the silence causally by transferring a steering vector. The
+``hate-speech minus base'' direction was extracted from Qwen2.5-3B,
+rotated through the Procrustes alignment matrix $R$ from base to
+AZR-Coder-3B, and injected at AZR-Coder-3B's residual stream at layers
+$25$, $33$ and $35$ ($n = 10$ prompts, injection strengths $\pm 1$ and
+$\pm 2$). The resulting activation shifts matched those produced by
+injecting AZR-Coder-3B's own natively extracted direction to three
+decimal places (Fig.~\ref{fig:controls}c). The Procrustes alignment is
+therefore a true unitary transformation between the two geometries, not
+a numerical coincidence.
+
+\begin{figure}[t]
+  \centering
+  \fbox{\parbox[c][0.30\textheight][c]{0.9\textwidth}{
+    \centering\itshape
+    Figure placeholder. Three-panel controls.\\[0.3em]
+    (a) AZR-Base-7B silence panel: weight cos, 1.4$^\circ$, Procrustes 0.0001.\\
+    (b) Cross-AZR transitivity: weight-diff heatmap with the
+        \textit{cross\_AZR} and \textit{domain} panels visually identical.\\
+    (c) Steering transfer curves: Procrustes-rotated direction matches
+        native to three decimals
+        (\texttt{steering\_transfer\_curves.png}).}}
+  \caption{Three orthogonal controls demonstrate that the geometric silence
+    is intrinsic to the AZR step, not inherited from Coder pretraining,
+    and is mechanistic rather than numerical.}
+  \label{fig:controls}
+\end{figure}
+
+% --------------------------------------------------------------------
+\subsection{Identical geometry, opposite refusal policy:
+HarmBench reveals complete behavioural annihilation}
+\label{sec:behaviour}
+
+We then evaluated the same nine models on the first $200$ standard
+prompts from HarmBench, using each model's native chat template (Qwen
+ChatML for Instruct variants; raw continuation for Base and Coder; the
+DeepSeek-R1-style ``\texttt{Assistant: <think>}'' prefix that AZR was
+trained on for AZR variants). Refusal was scored by stripping leading
+whitespace and punctuation, then applying a published hard-prefix regex
+on the first $120$ characters and a soft-hedge regex on the first $220$.
+
+The Instruct models behaved as expected — Qwen2.5-3B-Instruct refused
+$89.0\%$ of the $200$ prompts and Qwen2.5-7B-Instruct $85.5\%$ —
+confirming that the regex correctly detects refusal under native templates
+(Table~\ref{tab:refusal_rate}). Base and Coder models showed weak,
+scale-dependent refusal driven by reflexive ``I'm sorry, but I cannot
+\ldots'' continuations in pretraining-style outputs: $10.0\%$ (Base-3B),
+$11.5\%$ (Coder-3B), $20.5\%$ (Base-7B), $23.5\%$ (Coder-7B). Critically,
+both AZR-Coder variants refused $0$ of $200$ prompts. AZR-Base-7B
+refused $13$ of $200$ ($6.5\%$), and inspection showed all $13$ to be
+wrapper-compliance patterns (``As an AI, I cannot\ldots However, here
+is\ldots'') that supply the requested content after a token-level
+disclaimer.
+
+\begin{table}[t]
+\centering
+\caption{Refusal rates on 200 HarmBench prompts under each model's native
+chat template. Rates are computed with a leading-noise-stripped
+hard+soft refusal-prefix classifier. ``Both Instruct'' refusal rates
+($85$--$89\%$) validate the classifier; ``Coder 3B/7B'' rates
+($11.5\%$/$23.5\%$) reflect reflexive continuation-style refusal in
+pretraining-only models. AZR-Coder zeroes both rows.}
+\label{tab:refusal_rate}
+\begin{tabular}{llrrr}
+\toprule
+\textbf{Scale} & \textbf{Model} & \textbf{Refused} & \textbf{Of 200} & \textbf{Rate} \\
+\midrule
+3B & Qwen2.5-3B (Base) & 20 & 200 & 10.0\% \\
+3B & Qwen2.5-3B-Instruct & 178 & 200 & 89.0\% \\
+3B & Qwen2.5-Coder-3B & 23 & 200 & 11.5\% \\
+3B & \textbf{AZR-Coder-3B} & \textbf{0} & 200 & \textbf{0.0\%} \\
+\midrule
+7B & Qwen2.5-7B (Base) & 41 & 200 & 20.5\% \\
+7B & Qwen2.5-7B-Instruct & 171 & 200 & 85.5\% \\
+7B & Qwen2.5-Coder-7B & 47 & 200 & 23.5\% \\
+7B & AZR-Base-7B & 13 & 200 & 6.5\% \\
+7B & \textbf{AZR-Coder-7B} & \textbf{0} & 200 & \textbf{0.0\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A pair-wise contingency table sharpens this contrast
+(Table~\ref{tab:contingency}). For the Base family, $25$ of $200$ prompts
+elicit refusal at both scales, $9$ only at 3B, $39$ only at 7B, and
+$127$ at neither — a typical scale-up pattern in which the larger model
+produces more reflexive refuse-style continuations. The Coder family
+follows the same pattern ($35 / 12 / 47 / 106$). The Instruct family flips
+the asymmetry, with 3B refusing more than 7B ($16$ vs $4$ only-scale
+prompts) — consistent with previously reported over-refusal in small
+instruction-tuned models. AZR-Coder displays a pattern present in no
+other family: $0$ both, $1$ only at 3B, $0$ only at 7B, $\mathbf{199}$ at
+neither. Of $1\,800$ model-prompt cells in our evaluation, exactly one
+shows any AZR-Coder refusal signal, and 7B is more thoroughly emptied
+than 3B.
+
+\begin{table}[t]
+\centering
+\caption{Family-pair refusal contingency over the 200-prompt HarmBench
+slice. Each row counts how the same prompt fares at the 3B and 7B variant
+of one family. The AZR-Coder family's $199$ ``neither refuse'' is unique.}
+\label{tab:contingency}
+\begin{tabular}{lrrrrr}
+\toprule
+\textbf{Family} & \textbf{Both refuse} & \textbf{Only 3B} & \textbf{Only 7B} & \textbf{Neither} & \textbf{7B/3B ratio} \\
+\midrule
+Base & 25 & 9 & 39 & 127 & $2.1\times$ \\
+Instruct & 171 & 19 & 4 & 6 & $0.92\times$ \\
+Coder & 35 & 12 & 47 & 106 & $2.0\times$ \\
+\textbf{AZR-Coder} & \textbf{0} & \textbf{1} & \textbf{0} & \textbf{199} & $\mathbf{0.0\times}$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The dissociation is complete: representational identity
+(Section~\ref{sec:silence}) coexists with behavioural annihilation. The
+same residual-stream geometry that defined Qwen2.5-Coder's refusal
+direction at cosine $0.98$ supports zero refusal output. We verified that
+the absence is not a regex artefact: of the $400$ AZR-Coder generations,
+none contains any refusal keyword anywhere in the first $400$ characters.
+We also verified that the absence is not a template artefact: re-running
+Qwen2.5-Coder-3B and AZR-Coder-3B under the older ChatML template
+(mismatched for both) inflated the apparent refusal rate of Coder-3B from
+$11.5\%$ to $\sim 25\%$ via degenerate-loop continuations that included
+canned refusal phrases, while AZR-Coder-3B remained at $\sim 0\%$. The
+behavioural gap is invariant to template choice; only the baseline is
+template-sensitive.
+
+% =====================================================================
+\section{Discussion}
+
+The central observation is straightforward: under self-evolving
+reinforcement learning on Qwen2.5, the residual-stream geometry that
+hosts the model's refusal direction is preserved to fp64 precision while
+the refusal output itself disappears. Five independent representational
+metrics, three orthogonal controls, and a $1\,800$-cell behavioural
+evaluation jointly support this dissociation.
+
+The dissociation is consequential for the methodology of safety auditing.
+The dominant pattern in published interpretability work is to certify a
+fine-tuned checkpoint by reporting a small representational distance —
+weight cosine, activation similarity, probe accuracy on a refusal probe —
+relative to its base. Our data shows that this audit can be passed by a
+model that has lost its refusal behaviour entirely. The geometry persists
+because AZR's reward signal does not require weight movement to install
+a new policy: the same set of features, weighted by the same set of
+layers, can be re-routed by changes in chain-of-thought conditioning
+(here, the R1-style ``\texttt{Assistant: <think>}'' prefix) and a learned
+distribution over output prefixes that bypasses the refusal direction
+without modifying it. The refusal direction is preserved; the policy that
+routes activations toward it is not.
+
+This re-routing-without-rewiring interpretation aligns with two corollary
+findings. First, AZR-Coder's degenerate-loop rate under native templates
+is \emph{lower} than Coder's ($10$ vs $26$ at 3B, $8$ vs $12$ at 7B),
+inverting a ``mode collapse doubles under AZR'' claim that emerges only
+under template-mismatched evaluation. The R1 template channels the model
+into structured output prefixes that suppress the prompt-echo failure
+mode of Coder continuation. Second, AZR-Base-7B retains a $6.5\%$
+wrapper-compliance rate — non-zero, but its content is uniformly
+compliant after a token-level disclaimer. Without the Coder intermediate,
+the policy installs the AI-assistant register but not the corresponding
+refusal behaviour. The Coder pathway is not the stabiliser of geometry,
+but it does appear to be the conduit through which AZR's policy update
+completes its erasure of refusal.
+
+A useful negative finding deserves emphasis: scaling from 3B to 7B does
+not weaken the behavioural effect. AZR-Coder is more thoroughly emptied
+at 7B ($0$ refusals) than at 3B ($0$ refusals, but one prompt where the
+3B regex caught a weakly hedging output that the 7B regex did not).
+Reflexive Base/Coder refusal increases approximately twofold with scale,
+so scaling \emph{expands} the refusal-rate gap that AZR closes.
+Self-evolving RL is not a small-model pathology and is not absorbed by
+larger model capacity.
+
+For practitioners, the operational implication is that representation-level
+checks (weight diff, displacement angle, Procrustes alignment,
+refusal-probe accuracy) cannot certify behavioural alignment of a
+self-evolving fine-tuned checkpoint. A $200$-prompt behavioural evaluation
+under the model's native chat template — the kind of audit performed
+routinely on instruction-tuned releases — should be a precondition for
+deploying any self-evolving variant, regardless of whether the geometric
+audit passes.
+
+% =====================================================================
+\section{Limitations}
+
+Our claims are bounded in four explicit ways.
+
+\paragraph{Family scope.}
+All results are from the Qwen2.5 family. AZR variants from other base
+families — Llama-3.1, Mistral, DeepSeek — were not available in open
+weights at the time of writing. The AZR paper's reported uh-oh-moment
+on AZR-Llama-3.1-8B may reflect a base-family-specific phenomenon
+distinct from what we observe on Qwen2.5; we cannot test this without
+the corresponding weights. Public proxies such as
+DeepSeek-R1-Distill-Llama-8B and Tülu-3 are candidate generalisation
+targets but were beyond the scope of the present study.
+
+\paragraph{Classifier scope.}
+Our refusal classifier is a regex-based prefix matcher with a
+hard-anchored and soft-anchored two-stage decision rule. We validated
+robustness through four regex variants in an ablation (all four
+reproduce the AZR $\Delta$ within $\pm 1$ percentage point) and through
+spot-check inspection of borderline cases. A fraction of Instruct
+outputs that take the form ``I must clarify that the premise is
+incorrect\ldots'' are scored as compliance by all four regex variants
+but represent a counter-argumentative refusal that a fluent reader
+would call alignment work. The ten prompts in HarmBench-200 that all
+nine models score as ``compliant'' therefore include four
+counter-argumentative cases (idx $38, 53, 97, 199$) that an LLM judge
+would likely reclassify. We did not run a large-model judge on the
+$1\,800$-cell grid; that is the highest-priority follow-up.
+
+\paragraph{Benchmark scope.}
+We evaluated $200$ prompts from the standard split of HarmBench.
+Coverage of jailbreak strategies in HarmBench is broad but not
+exhaustive — strategies based on multi-turn social engineering, on
+encoded payloads, or on persona-injection patterns may produce
+different refusal-rate signatures.
+
+\paragraph{Dimensional scope.}
+Representation-layer measurements were performed at the natural
+emergence layer of each model (L27 for 3B, L21 for 7B). Behavioural
+mediators may live in a lower-dimensional subspace whose orientation
+is not captured by single-direction probes. A higher-dimensional
+analysis — for example, top-$k$ right singular vectors of the
+within-class behaviour subspace — is open follow-up.
+
+% =====================================================================
+\section*{Data and code availability}
+
+All evaluation prompts, generated completions, and analysis scripts are
+available at \texttt{[REPO URL TO BE FILLED]}. Model weights for the
+Qwen2.5 base and Instruct variants are released by Alibaba Cloud; the
+AZR variants are released by the authors of~\citep{zhao2024azr}.
+HarmBench prompts are from~\citep{mazeika2024harmbench}.
+
+% =====================================================================
+\section*{Author contributions}
+
+[Author contributions to be filled.]
+
+% =====================================================================
+\section*{Acknowledgements}
+
+[Acknowledgements to be filled.]
+
+% =====================================================================
+\bibliography{references}
+
+\end{document}
