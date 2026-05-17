@@ -1,0 +1,41 @@
+{
+  "timestamp": "generations_3B_idx150_199",
+  "model_set": "3B",
+  "dtype": "float32",
+  "n_harmful": 50,
+  "n_harmless": 0,
+  "max_new_tokens": 1024,
+  "template_mode": "auto",
+  "prompts_file": "/home/Zhu_24R8103/The-Inner-of-Self-Evolving-Agents/results/harmbench_eval_20260515-1512/prompts_idx150.json",
+  "prompts_meta": {
+    "source": "harmbench",
+    "sample_mode": "slice",
+    "filter": "FunctionalCategory=standard, ContextString=empty",
+    "n_harmful": 50,
+    "n_harmless": 0,
+    "pool_size_harmful": 200,
+    "start_idx": 150,
+    "end_idx_excl": 200,
+    "written_at": "2026-05-17T07:26:52.353265"
+  },
+  "decoding": "do_sample=False (greedy)",
+  "summaries": {
+    "Qwen2.5-3B-Instruct": {
+      "n_done": 50,
+      "n_skipped": 0,
+      "n_new": 50,
+      "elapsed_sec": 449.4071877002716,
+      "out_path": "/home/Zhu_24R8103/The-Inner-of-Self-Evolving-Agents/results/harmbench_eval_20260515-1512/generations_3B_idx150_199/Qwen2.5-3B-Instruct/generations.jsonl",
+      "template_mode": "qwen_chatml"
+    },
+    "AZR-Coder-3B": {
+      "n_done": 50,
+      "n_skipped": 0,
+      "n_new": 50,
+      "elapsed_sec": 766.3963739871979,
+      "out_path": "/home/Zhu_24R8103/The-Inner-of-Self-Evolving-Agents/results/harmbench_eval_20260515-1512/generations_3B_idx150_199/AZR-Coder-3B/generations.jsonl",
+      "template_mode": "azr_r1"
+    }
+  },
+  "written_at": "2026-05-17T08:03:50.709982"
+}

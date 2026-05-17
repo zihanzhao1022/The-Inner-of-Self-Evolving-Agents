@@ -1,0 +1,33 @@
+{
+  "timestamp": "generations_3B_idx50_99",
+  "model_set": "3B",
+  "dtype": "float32",
+  "n_harmful": 50,
+  "n_harmless": 0,
+  "max_new_tokens": 1024,
+  "template_mode": "auto",
+  "prompts_file": "/home/Zhu_24R8103/The-Inner-of-Self-Evolving-Agents/results/harmbench_eval_20260515-1512/prompts_idx50.json",
+  "prompts_meta": {
+    "source": "harmbench",
+    "sample_mode": "slice",
+    "filter": "FunctionalCategory=standard, ContextString=empty",
+    "n_harmful": 50,
+    "n_harmless": 0,
+    "pool_size_harmful": 200,
+    "start_idx": 50,
+    "end_idx_excl": 100,
+    "written_at": "2026-05-17T01:29:22.019392"
+  },
+  "decoding": "do_sample=False (greedy)",
+  "summaries": {
+    "Qwen2.5-Coder-3B": {
+      "n_done": 50,
+      "n_skipped": 0,
+      "n_new": 50,
+      "elapsed_sec": 1098.6510996818542,
+      "out_path": "/home/Zhu_24R8103/The-Inner-of-Self-Evolving-Agents/results/harmbench_eval_20260515-1512/generations_3B_idx50_99/Qwen2.5-Coder-3B/generations.jsonl",
+      "template_mode": "raw"
+    }
+  },
+  "written_at": "2026-05-17T04:02:30.167583"
+}
