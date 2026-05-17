@@ -59,6 +59,11 @@ trap "rm -f '$RUN_TAG'" EXIT
 
 export CUDA_VISIBLE_DEVICES="$GPU_ID"
 
+# Activate the project's conda env. Use PATH-prepend (matches the pattern in
+# run_harmbench_idx0.sh) — lighter than `conda activate` and avoids the
+# `.bashrc` not-sourced problem on non-interactive ssh.
+export PATH="$HOME/miniconda3/envs/py310/bin:$PATH"
+
 # Move into repo root (worker is launched from the repo root by dispatcher,
 # but be defensive in case it's invoked from elsewhere).
 cd "$(dirname "$(readlink -f "$0")")"
