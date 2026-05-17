@@ -411,17 +411,47 @@ def _load_arditi_combined(
     return {"harmful": harmful, "harmless": harmless}
 
 
+def _load_harmbench200_alpaca200(max_per_class: Optional[int] = None,
+                                  **_kwargs) -> Dict[str, List[str]]:
+    """Frozen paired set: 200 HarmBench harmful + 200 Alpaca harmless.
+
+    Reads the JSON committed at `data/harmbench200_alpaca200.json` (built by
+    `llm_lens.examples.build_harmbench_paired_prompts`). source_idx of the
+    harmful side is aligned 1-to-1 with the HarmBench-200 behavioural eval
+    in `results/harmbench_eval_20260515-1512/`, so the representation
+    measurements computed under this loader are directly comparable to the
+    behaviour numbers.
+    """
+    repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = os.path.join(repo_root, "data", "harmbench200_alpaca200.json")
+    if not os.path.exists(path):
+        raise FileNotFoundError(
+            f"{path} not found. Build it first with:\n"
+            f"  python -m llm_lens.examples.build_harmbench_paired_prompts "
+            f"--n 200 --out data/harmbench200_alpaca200.json"
+        )
+    with open(path, encoding="utf-8") as f:
+        payload = json.load(f)
+    out: Dict[str, List[str]] = {"harmful": [], "harmless": []}
+    for r in payload["prompts"]:
+        out[r["class"]].append(r["prompt"])
+    if max_per_class:
+        out = {k: v[:max_per_class] for k, v in out.items()}
+    return out
+
+
 # ── Registry ────────────────────────────────────────────────────────────────
 
 REGISTRY: Dict[str, Callable[..., Dict[str, List[str]]]] = {
-    "default":             _load_default,
-    "condition_multiple":  _load_condition_multiple,
-    "cm_binary":           _load_cm_binary,
-    "harmbench":           _load_harmbench,
-    "alpaca":              _load_alpaca,
-    "malicious_instruct":  _load_malicious_instruct,
-    "advbench_harmful":    _load_advbench_harmful,
-    "arditi_combined":     _load_arditi_combined,
+    "default":                  _load_default,
+    "condition_multiple":       _load_condition_multiple,
+    "cm_binary":                _load_cm_binary,
+    "harmbench":                _load_harmbench,
+    "alpaca":                   _load_alpaca,
+    "malicious_instruct":       _load_malicious_instruct,
+    "advbench_harmful":         _load_advbench_harmful,
+    "arditi_combined":          _load_arditi_combined,
+    "harmbench200_alpaca200":   _load_harmbench200_alpaca200,
 }
 
 
