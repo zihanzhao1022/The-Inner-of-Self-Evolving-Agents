@@ -86,6 +86,10 @@ cd "$(dirname "$(readlink -f "$0")")"
         || { echo "[$(date)] STAGE A FAILED for $SHORT" >&2; exit 1; }
 
     # --- Stage B: Arditi refusal direction ---
+    # NOTE: output-suffix MUST be per-model. Without ${SHORT} in the path,
+    # parallel workers would overwrite candidate_directions.npz on each
+    # completion, leaving only the last-finishing model's directions
+    # (we hit this on the first 3B run; recovered by redo).
     echo "[$(date)] === stage B: refusal direction (n=200, eoi_len=5) ==="
     python -m llm_lens.examples.run_refusal_direction \
         --dataset harmbench200_alpaca200 \
@@ -94,7 +98,7 @@ cd "$(dirname "$(readlink -f "$0")")"
         --targets "$SHORT" \
         --dtype "$DTYPE" \
         --results-root results \
-        --output-suffix "${TS}_harmbench_paired_${SET}" \
+        --output-suffix "${TS}_harmbench_paired_${SET}_${SHORT}" \
         || { echo "[$(date)] STAGE B FAILED for $SHORT" >&2; exit 2; }
 
     echo "[$(date)] DONE    short=$SHORT"
