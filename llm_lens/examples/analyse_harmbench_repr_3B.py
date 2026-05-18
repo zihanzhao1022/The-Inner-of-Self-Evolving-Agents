@@ -103,7 +103,8 @@ def load_phase1_report(short_full: str) -> dict:
 
 def load_centroids(folder: str) -> dict:
     p = os.path.join(PHASE1_ROOT, "class_centroids", folder, f"{TS}.npz")
-    return dict(np.load(p))
+    # tags_order is an object (string) array — needs allow_pickle.
+    return dict(np.load(p, allow_pickle=True))
 
 
 def load_refusal_direction(short: str) -> dict:

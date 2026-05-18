@@ -1,0 +1,12 @@
+{
+  "model_name": "Qwen/Qwen2.5-Coder-7B",
+  "dataset": "harmbench200_alpaca200",
+  "max_per_class": 200,
+  "timestamp": "20260518-0020",
+  "sample_counts": {
+    "harmful": 200,
+    "harmless": 200
+  },
+  "capture_heads": true,
+  "written_at": "2026-05-18T11:32:38"
+}
